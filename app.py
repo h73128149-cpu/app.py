@@ -16,8 +16,24 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("CHAT_SECRET_KEY") or secrets.token_hex(32)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Set COOKIE_SECURE=1 in production (HTTPS); keep local HTTP development usable by default.
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("COOKIE_SECURE", "0") == "1"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 ALLOWED_EXT = {"png","jpg","jpeg","gif","webp","pdf","txt","zip","mp3","wav","ogg","m4a","mp4","webm","docx","xlsx"}
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=()")
+    return response
+
+@app.get("/healthz")
+def healthz():
+    return jsonify(status="ok", service="PayamRasan Pro")
 
 def db():
     if "db" not in g:
@@ -265,12 +281,14 @@ def edit_message(mid):
     me=current_user(); data=request.get_json(silent=True) or {}
     body=str(data.get("body","")).strip()
     if not body: return jsonify(error="متن خالی است"), 400
+    msg = db().execute("SELECT * FROM messages WHERE id=? AND sender_id=? AND deleted=0", (mid, me["id"])).fetchone()
+    if not msg:
+        return jsonify(error="پیام پیدا نشد یا اجازهٔ ویرایش آن را نداری"), 404
     db().execute("UPDATE messages SET body=? WHERE id=? AND sender_id=?", (body, mid, me["id"]))
     db().commit()
-    msg = db().execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
-    if msg:
-        socketio.emit("update_message", dict(msg), room=f"user:{msg['receiver_id']}")
-        socketio.emit("update_message", dict(msg), room=f"user:{me['id']}")
+    updated = db().execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
+    socketio.emit("update_message", dict(updated), room=f"user:{msg['receiver_id']}")
+    socketio.emit("update_message", dict(updated), room=f"user:{me['id']}")
     return jsonify(ok=True)
 
 @app.post("/api/messages/<int:mid>/delete")
@@ -289,14 +307,45 @@ def delete_message(mid):
 @login_required
 def react_message(mid):
     me=current_user(); data=request.get_json(silent=True) or {}
-    reaction=str(data.get("reaction","")).strip()
+    reaction=str(data.get("reaction","")).strip()[:16]
+    allowed_reactions={"", "👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🤔"}
+    if reaction not in allowed_reactions:
+        return jsonify(error="واکنش پشتیبانی نمی‌شود"), 400
+    msg = db().execute("SELECT * FROM messages WHERE id=? AND deleted=0 AND (sender_id=? OR receiver_id=?)", (mid, me["id"], me["id"])).fetchone()
+    if not msg:
+        return jsonify(error="پیام پیدا نشد یا دسترسی ندارید"), 404
     db().execute("UPDATE messages SET reaction=? WHERE id=?", (reaction, mid))
     db().commit()
-    msg = db().execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
-    if msg:
-        socketio.emit("update_message", dict(msg), room=f"user:{msg['receiver_id']}")
-        socketio.emit("update_message", dict(msg), room=f"user:{msg['sender_id']}")
+    updated = db().execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
+    socketio.emit("update_message", dict(updated), room=f"user:{msg['receiver_id']}")
+    socketio.emit("update_message", dict(updated), room=f"user:{msg['sender_id']}")
     return jsonify(ok=True)
+
+@app.get("/api/chats/<int:other_id>/media")
+@login_required
+def chat_media(other_id):
+    me=current_user()
+    if other_id != me["id"] and not db().execute("SELECT id FROM users WHERE id=?", (other_id,)).fetchone():
+        return jsonify(error="کاربر پیدا نشد"), 404
+    rows=db().execute("""SELECT id,sender_id,receiver_id,body,msg_type,created_at FROM messages
+        WHERE deleted=0 AND ((sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?))
+        AND msg_type IN ('image','file','voice') ORDER BY id DESC LIMIT 100""",
+        (me["id"],other_id,other_id,me["id"])).fetchall()
+    return jsonify(items=[dict(r) for r in rows])
+
+@app.post("/api/messages/<int:mid>/pin")
+@login_required
+def pin_message(mid):
+    me=current_user()
+    msg=db().execute("SELECT * FROM messages WHERE id=? AND deleted=0 AND (sender_id=? OR receiver_id=?)",(mid,me["id"],me["id"])).fetchone()
+    if not msg:
+        return jsonify(error="پیام پیدا نشد یا دسترسی ندارید"),404
+    new_value=0 if msg["pinned"] else 1
+    db().execute("UPDATE messages SET pinned=? WHERE id=?",(new_value,mid)); db().commit()
+    updated=db().execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()
+    socketio.emit("update_message",dict(updated),room=f"user:{msg['sender_id']}")
+    socketio.emit("update_message",dict(updated),room=f"user:{msg['receiver_id']}")
+    return jsonify(ok=True,pinned=bool(new_value))
 
 @app.post("/api/upload")
 @login_required
@@ -335,7 +384,7 @@ def save_settings():
         return jsonify(error="پس‌زمینه باید رنگ HEX یا لینک تصویر باشد"),400
     db().execute("INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)",(u["id"],))
     theme=str(data.get("theme","dark"))[:24]
-    if theme not in {"dark","telegram","neon","crimson","matrix","amoled"}: theme="dark"
+    if theme not in {"dark","light"}: theme="dark"
     db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=?,theme=? WHERE user_id=?",
                  (bg,1 if data.get("show_last_seen") else 0,theme,u["id"]))
     db().commit()
@@ -502,6 +551,23 @@ body[data-theme] .action-btn:hover { background:var(--panel-hover) !important; }
 body[data-theme] .folder-icon.active { background:var(--panel-bg) !important; color:var(--accent) !important; }
 body[data-theme] button[onclick="saveAppSettings()"] { background:var(--accent) !important; }
 
+
+/* Strict monochrome palette: only black and white themes */
+:root { --text-main:#fff; --button-text:#000; }
+body[data-theme="dark"] { color:#fff !important; }
+body[data-theme="dark"] .chat-main, body[data-theme="dark"] .chat-messages { background:#000 !important; }
+body[data-theme="dark"] .sidebar, body[data-theme="dark"] .sidebar-header, body[data-theme="dark"] .chat-topbar, body[data-theme="dark"] .chat-composer, body[data-theme="dark"] .modal-card { background:#101010 !important; }
+body[data-theme="dark"] .chat-row.active { background:#303030 !important; }
+body[data-theme="dark"] .message-bubble.mine { background:#292929 !important; }
+body[data-theme="dark"] .message-bubble:not(.mine) { background:#151515 !important; }
+body[data-theme="light"] { color:#111 !important; }
+body[data-theme="light"] .chat-main, body[data-theme="light"] .chat-messages { background:#fff !important; }
+body[data-theme="light"] .sidebar, body[data-theme="light"] .sidebar-header, body[data-theme="light"] .chat-topbar, body[data-theme="light"] .chat-composer, body[data-theme="light"] .modal-card { background:#f5f5f5 !important; color:#111 !important; }
+body[data-theme="light"] .chat-row.active { background:#ddd !important; }
+body[data-theme="light"] .message-bubble.mine { background:#e5e5e5 !important; color:#111 !important; }
+body[data-theme="light"] .message-bubble:not(.mine) { background:#f2f2f2 !important; color:#111 !important; }
+body[data-theme="light"] input, body[data-theme="light"] textarea, body[data-theme="light"] select { color:#111 !important; }
+
 </style>
 </head>
 <body>
@@ -655,7 +721,6 @@ body { background: radial-gradient(ellipse at 75% 0%, #13243a 0%, #0b111b 48%, #
     <div class="folder-icon active" onclick="switchFolder('all')">💬</div>
     <div class="folder-icon" onclick="openProfileModal()" title="پروفایل من">👤</div>
     <div class="folder-icon" onclick="openAppSettings()" title="تنظیمات و تم‌ها">🎨</div>
-    <div class="folder-icon" onclick="createGroup()" title="ساخت گروه">👥</div>
   </div>
 
   <aside class="sidebar" id="sidebarPanel">
@@ -881,16 +946,22 @@ async function openProfileModal() {
 
 async function openAppSettings() {
   const d = await api('/api/settings');
-  $('modalContent').innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:25px">🎨</div><div><h3>تنظیمات برنامه</h3><div style="font-size:12px;color:var(--text-muted);margin-top:3px">ظاهر، حریم خصوصی و تجربهٔ گفتگو</div></div></div><hr style="border:0;border-top:1px solid var(--border-color);margin:12px 0">
-    <label style="display:block;margin:10px 0">پس‌زمینه چت (رنگ مثل #101820 یا لینک تصویر)</label>
-    <input id="settingBg" value="${esc(d.chat_background||'')}" placeholder="#101820 یا https://..." style="width:100%;padding:10px;background:#0e1621;color:white;border:1px solid #334155;border-radius:8px">
-    <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> اجازه نمایش آخرین بازدید من</label>
-    <label style="display:block;margin:12px 0 6px">انتخاب تم</label><select id="settingTheme" onchange="applyTheme(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:white;border:1px solid var(--border-color);border-radius:9px"><option value="dark" ${d.theme==='dark'?'selected':''}>🌌 Dark Pro</option><option value="telegram" ${d.theme==='telegram'?'selected':''}>🔵 Telegram Blue</option><option value="neon" ${d.theme==='neon'?'selected':''}>💜 Neon Cyber</option><option value="crimson" ${d.theme==='crimson'?'selected':''}>🔴 Crimson</option><option value="matrix" ${d.theme==='matrix'?'selected':''}>🟢 Matrix</option><option value="amoled" ${d.theme==='amoled'?'selected':''}>⚫ AMOLED</option></select><div style="display:flex;gap:7px;margin:10px 0 16px;flex-wrap:wrap"><span style="width:22px;height:22px;border-radius:50%;background:#43c6ff;border:2px solid #ffffff55"></span><span style="width:22px;height:22px;border-radius:50%;background:#b66cff;border:2px solid #ffffff55"></span><span style="width:22px;height:22px;border-radius:50%;background:#ff4568;border:2px solid #ffffff55"></span><span style="width:22px;height:22px;border-radius:50%;background:#49ff8b;border:2px solid #ffffff55"></span><span style="font-size:11px;color:var(--text-muted);align-self:center">با انتخاب تم، پیش‌نمایش فوری می‌بینی.</span></div>
-    <button onclick="saveAppSettings()" style="padding:11px;background:var(--accent);border:0;color:white;border-radius:10px">ذخیره تنظیمات</button>
-    <button onclick="closeModal()" style="padding:11px;background:#334155;border:0;color:white;border-radius:10px;margin-right:6px">بستن</button>`;
+  const lang = getAppLanguage();
+  const en = lang === 'en';
+  $('modalContent').innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:25px">⚙️</div><div><h3>${en?'App settings':'تنظیمات برنامه'}</h3><div style="font-size:12px;color:var(--text-muted);margin-top:3px">${en?'Appearance, privacy and chat experience':'ظاهر، حریم خصوصی و تجربهٔ گفتگو'}</div></div></div><hr style="border:0;border-top:1px solid var(--border-color);margin:12px 0">
+    <label style="display:block;margin:10px 0">${en?'App language':'زبان برنامه'}</label>
+    <select id="settingLanguage" onchange="applyLanguage(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:var(--text-main,white);border:1px solid var(--border-color);border-radius:9px"><option value="fa" ${!en?'selected':''}>فارسی</option><option value="en" ${en?'selected':''}>English</option></select>
+    <label style="display:block;margin:12px 0 6px">${en?'Chat background (HEX color or image URL)':'پس‌زمینه چت (رنگ HEX یا لینک تصویر)'}</label>
+    <input id="settingBg" value="${esc(d.chat_background||'')}" placeholder="#101010 or https://..." style="width:100%;padding:10px;background:var(--bg-main);color:var(--text-main,white);border:1px solid var(--border-color);border-radius:8px">
+    <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> ${en?'Allow others to see my last seen':'اجازه نمایش آخرین بازدید من'}</label>
+    <label style="display:block;margin:12px 0 6px">${en?'Color theme':'تم رنگی'}</label><select id="settingTheme" onchange="applyTheme(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:var(--text-main,white);border:1px solid var(--border-color);border-radius:9px"><option value="dark" ${d.theme!=='light'?'selected':''}>⚫ ${en?'Black':'سیاه'}</option><option value="light" ${d.theme==='light'?'selected':''}>⚪ ${en?'White':'سفید'}</option></select>
+    <div style="font-size:12px;color:var(--text-muted);margin:10px 0 16px">${en?'Only black and white themes are available for now.':'فعلاً فقط تم‌های سیاه و سفید فعال هستند.'}</div>
+    <button onclick="saveAppSettings()" style="padding:11px;background:var(--accent);border:1px solid var(--border-color);color:var(--button-text,white);border-radius:10px">${en?'Save settings':'ذخیره تنظیمات'}</button>
+    <button onclick="closeModal()" style="padding:11px;background:var(--panel-hover);border:1px solid var(--border-color);color:var(--text-main,white);border-radius:10px;margin-right:6px">${en?'Close':'بستن'}</button>`;
+  $('modalOverlay').classList.remove('hidden');
 }
 async function saveAppSettings() {
-  try { const bg=$('settingBg').value.trim(); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value})}); applyChatBackground(bg); applyTheme($('settingTheme').value); alert('تنظیمات ذخیره شد'); closeModal(); }
+  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value})}); applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); alert(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
   catch(e){ alert(e.message); }
 }
 
@@ -963,8 +1034,25 @@ function toggleContactMute(){
 function showContactMore(){
   $('modalContent').innerHTML=`<h3 style="margin-bottom:14px">مدیریت مخاطب</h3><button onclick="blockContactDemo()" style="width:100%;padding:12px;margin-bottom:8px;border:1px solid #793b45;border-radius:10px;background:#351c24;color:#ff9ca8;cursor:pointer">🚫 مسدود کردن مخاطب</button><button onclick="openHeaderProfile()" style="width:100%;padding:11px;border:1px solid var(--border-color);border-radius:10px;background:transparent;color:white;cursor:pointer">بازگشت به پروفایل</button>`;
 }
-function blockContactDemo(){ alert('مسدودسازی سمت سرور هنوز پیاده‌سازی نشده؛ این دکمه فعلاً اقدامی روی حساب انجام نمی‌دهد.'); }
-function showContactMedia(){ alert('نمایش جداگانهٔ رسانه‌های گفتگو هنوز به API اختصاصی نیاز دارد.'); }
+async function blockContactDemo(){
+  if (!activeUser) return;
+  if (!confirm('این مخاطب مسدود شود؟')) return;
+  try { await api('/api/block/'+activeUser.id,{method:'POST'}); closeModal(); alert(getAppLanguage()==='en'?'Contact blocked.':'مخاطب مسدود شد.'); activeUser=null; loadDialogs(); }
+  catch(e){ alert(e.message); }
+}
+async function showContactMedia(){
+  if (!activeUser) return;
+  try {
+    const d=await api('/api/chats/'+activeUser.id+'/media');
+    const en=getAppLanguage()==='en';
+    const items=d.items||[];
+    $('modalContent').innerHTML=`<h3 style="margin-bottom:12px">${en?'Shared media':'رسانه‌های گفتگو'}</h3>${items.length?items.map(x=>{
+      const url=esc(x.body||'');
+      const label=x.msg_type==='image'?'🖼 Image':x.msg_type==='voice'?'🎙 Voice message':'📎 File';
+      return `<div style="padding:10px;margin:6px 0;border:1px solid var(--border-color);border-radius:9px;overflow-wrap:anywhere">${label}<div><a href="${url}" target="_blank" rel="noopener" style="color:var(--accent)">${url}</a></div><small style="color:var(--text-muted)">${esc((x.created_at||'').replace('T',' ').slice(0,16))}</small></div>`;
+    }).join(''):`<p style="color:var(--text-muted)">${en?'No shared media yet.':'هنوز رسانه‌ای در این گفتگو نیست.'}</p>`}<button onclick="openHeaderProfile()" style="margin-top:10px;padding:10px;border:1px solid var(--border-color);border-radius:9px;background:transparent;color:var(--text-main,white)">${en?'Back':'بازگشت'}</button>`;
+  } catch(e){ alert(e.message); }
+}
 
 
 function formatLastSeen(value) {
@@ -1002,22 +1090,39 @@ async function deleteChat(id) {
 }
 function applyTheme(theme) {
   const root=document.documentElement;
-  const allowed=['dark','telegram','neon','crimson','matrix','amoled'];
-  if (!allowed.includes(theme)) theme='dark';
+  if (!['dark','light'].includes(theme)) theme='dark';
   const themes={
-    dark:['#0b111b','#111c2b','#1b2a3d','#24496d','#43c6ff','#245a83','#172536','#91a8c0','#26364a'],
-    telegram:['#0e1621','#17212b','#202b38','#2b5278','#2AABEE','#2b5278','#182533','#8eabbf','#0f151d'],
-    neon:['#080914','#111126','#202044','#352c72','#b66cff','#4b3187','#19182d','#b9b4dc','#322d55'],
-    crimson:['#10090c','#211219','#38202a','#612637','#ff4568','#70253a','#29151e','#c9a4ae','#40202b'],
-    matrix:['#030906','#09150e','#10271a','#17472c','#49ff8b','#1a6338','#0d2015','#8ebba0','#163522'],
-    amoled:['#000000','#050505','#151515','#222222','#39bfff','#202020','#101010','#999999','#242424']
+    dark: {bg:'#000000',panel:'#101010',hover:'#202020',active:'#303030',accent:'#ffffff',out:'#292929',inside:'#151515',muted:'#b8b8b8',border:'#383838',text:'#ffffff',buttonText:'#000000'},
+    light:{bg:'#ffffff',panel:'#f5f5f5',hover:'#e9e9e9',active:'#dddddd',accent:'#111111',out:'#e5e5e5',inside:'#f2f2f2',muted:'#555555',border:'#d0d0d0',text:'#111111',buttonText:'#ffffff'}
   };
   const t=themes[theme];
-  ['--bg-main','--panel-bg','--panel-hover','--active-bg','--accent','--bubble-out','--bubble-in','--text-muted','--border-color'].forEach((k,i)=>root.style.setProperty(k,t[i]));
+  const vars={'--bg-main':t.bg,'--panel-bg':t.panel,'--panel-hover':t.hover,'--active-bg':t.active,'--accent':t.accent,'--bubble-out':t.out,'--bubble-in':t.inside,'--text-muted':t.muted,'--border-color':t.border,'--text-main':t.text,'--button-text':t.buttonText};
+  Object.entries(vars).forEach(([k,v])=>root.style.setProperty(k,v));
   document.body.dataset.theme=theme;
-  /* The original visual skin used fixed gradients, so update the page surface too. */
-  document.body.style.background=t[0];
+  document.body.style.background=t.bg;
+  document.body.style.color=t.text;
+  document.querySelectorAll('.sidebar-header, .sidebar > div:first-child').forEach(el=>{el.style.background=t.panel;});
   try { localStorage.setItem('pr-theme',theme); } catch(e) {}
+}
+function getAppLanguage() {
+  try { return localStorage.getItem('pr-language') === 'en' ? 'en' : 'fa'; } catch(e) { return 'fa'; }
+}
+function applyLanguage(lang) {
+  lang = lang === 'en' ? 'en' : 'fa';
+  try { localStorage.setItem('pr-language',lang); } catch(e) {}
+  document.documentElement.lang=lang;
+  document.documentElement.dir=lang==='fa'?'rtl':'ltr';
+  document.body.dir=document.documentElement.dir;
+  const en=lang==='en';
+  const search=$('searchInput'); if(search) search.placeholder=en?'Search username...':'جستجو آیدی...';
+  const title=$('chatTitle'); if(title && !activeUser && !activeGroup) title.textContent=en?'PayamRasan Pro':'تلگرام پرو';
+  const status=$('chatStatus'); if(status && !activeUser && !activeGroup) status.textContent=en?'Select a chat':'انتخاب گفتگو';
+  const input=$('messageInput'); if(input) input.placeholder=en?'Write a message...':'نوشتن پیام...';
+  const settingsBtn=document.querySelector('.folder-icon[onclick="openAppSettings()"]'); if(settingsBtn) settingsBtn.title=en?'Settings and themes':'تنظیمات و تم‌ها';
+  const profileBtn=document.querySelector('.folder-icon[onclick="openProfileModal()"]'); if(profileBtn) profileBtn.title=en?'My profile':'پروفایل من';
+  const accountBtn=document.querySelector('button[onclick="accountInfo()"]'); if(accountBtn) {accountBtn.title=en?'Current account and account management':'حساب فعلی و مدیریت حساب‌ها'; accountBtn.textContent=en?'👤 Account':'👤 حساب';}
+  const empty=$('chatMessages')?.querySelector('div[style*="margin: auto"]');
+  if(empty && !activeUser && !activeGroup) empty.textContent=en?'Select a conversation':'یک مخاطب را انتخاب کنید';
 }
 function applyChatBackground(value) {
   const box = $('chatMessages');
@@ -1051,6 +1156,8 @@ async function toggleVoiceRecording() {
   } catch(e) { alert('اجازه دسترسی به میکروفون داده نشد یا ضبط صدا ممکن نیست.'); }
 }
 async function createGroup() {
+  alert(getAppLanguage()==='en'?'Groups are temporarily disabled.':'بخش گروه‌ها فعلاً غیرفعال است.');
+  return;
   const title = prompt('نام گروه را وارد کن:');
   if (!title?.trim()) return;
   const membersText = prompt('آیدی اعضا را با کاما جدا کن (مثلاً 2,3). خودت هم عضو می‌شوی:');
@@ -1070,11 +1177,14 @@ function messageMenu(m,isGroup=false) {
   const choices=[];
   choices.push(['📋 کپی متن',()=>navigator.clipboard?.writeText(m.body||'')]);
   choices.push(['↩️ پاسخ',()=>{ $('messageInput').value='↩ '+(m.sender_name||m.sender_username||'')+': '+(m.body||'').slice(0,100)+'\n'; $('messageInput').focus(); }]);
+  if(!isGroup){ choices.push([m.pinned?'📌 برداشتن سنجاق':'📌 سنجاق کردن',()=>togglePinMessage(m.id)]); choices.push(['👍 واکنش',()=>reactToMessage(m.id)]); }
   if(!isGroup && m.sender_id===meId){ choices.push(['✏️ ویرایش',()=>editMessage(m.id,m.body||'')]); choices.push(['🗑️ حذف',()=>deleteMessage(m.id)]); }
   const html=`<h3 style="margin-bottom:12px">گزینه‌های پیام</h3>${choices.map((c,i)=>`<button onclick="runMessageChoice(${i})" style="display:block;width:100%;padding:11px;margin:6px 0;background:#172536;color:white;border:1px solid #344a64;border-radius:9px;text-align:right">${c[0]}</button>`).join('')}<button onclick="closeModal()" style="width:100%;padding:10px;background:transparent;color:#9fb2c7;border:0">بستن</button>`;
   window._messageChoices=choices; $('modalContent').innerHTML=html; $('modalOverlay').classList.remove('hidden');
 }
 function runMessageChoice(i){const c=window._messageChoices?.[i];if(c){closeModal();Promise.resolve(c[1]()).catch(()=>{});}}
+async function togglePinMessage(id){try{const d=await api('/api/messages/'+id+'/pin',{method:'POST'});await refreshActiveChat();alert(d.pinned?'پیام سنجاق شد':'سنجاق پیام برداشته شد');}catch(e){alert(e.message);}}
+async function reactToMessage(id){const reaction=prompt('واکنش را انتخاب کن: 👍 ❤️ 😂 😮 😢 🔥 👏 🤔','👍');if(reaction===null)return;try{await api('/api/messages/'+id+'/react',{method:'POST',body:JSON.stringify({reaction:reaction.trim()})});await refreshActiveChat();}catch(e){alert(e.message);}}
 function appendMessage(m, isGroup=false) {
   if (m.id != null && seenMessageIds.has(m.id)) return;
   if (m.id != null) seenMessageIds.add(m.id);
@@ -1091,7 +1201,7 @@ function appendMessage(m, isGroup=false) {
   else if(m.msg_type === 'file') bodyHtml = `<a href="${esc(m.body)}" target="_blank" rel="noopener" style="color:#7dd3fc">📎 دریافت فایل</a>`;
   let actions = (!isGroup && isMine) ? `<div style="display:flex;gap:8px;margin-top:6px"><button onclick="editMessage(${m.id},${JSON.stringify(m.body||'')})" style="background:none;border:0;color:#bae6fd;cursor:pointer">ویرایش</button><button onclick="deleteMessage(${m.id})" style="background:none;border:0;color:#fca5a5;cursor:pointer">حذف</button></div>` : '';
   let sender = isGroup ? `<div style="font-size:11px;color:#7dd3fc;margin-bottom:4px">${esc(m.sender_name||m.sender_username||'کاربر')}</div>` : '';
-  el.innerHTML = `${sender}<div>${bodyHtml}</div>${actions}<div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
+  el.innerHTML = `${sender}${m.pinned?'<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📌 پیام سنجاق‌شده</div>':''}<div>${bodyHtml}</div>${m.reaction?`<div style="font-size:14px;margin-top:4px">${esc(m.reaction)}</div>`:''}${actions}<div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
   $('chatMessages').appendChild(el);
 }
 
@@ -1152,7 +1262,7 @@ socket.on('new_message', m => {
 });
 
 loadDialogs();
-api('/api/settings').then(x => {applyChatBackground(x.chat_background || ''); applyTheme(x.theme||'dark');}).catch(()=>{applyTheme(localStorage.getItem('pr-theme')||'dark');});
+api('/api/settings').then(x => {applyChatBackground(x.chat_background || ''); applyTheme(x.theme==='light'?'light':'dark'); applyLanguage(getAppLanguage());}).catch(()=>{applyTheme(localStorage.getItem('pr-theme')==='light'?'light':'dark'); applyLanguage(getAppLanguage());});
 </script>
 </body>
 </html>
