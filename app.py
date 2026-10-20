@@ -1,10 +1,10 @@
 """
-PayamRasan Pro — Fully Featured Telegram Clone
+PayamRasan Pro — Modern Telegram Web UI Clone
 """
 import os, re, sqlite3, secrets, hashlib, hmac
 from functools import wraps
 from datetime import datetime, timezone
-from flask import Flask, request, redirect, url_for, session, g, jsonify, render_template_string, abort
+from flask import Flask, request, redirect, url_for, session, g, jsonify, render_template_string
 from flask_socketio import SocketIO, emit, join_room
 from werkzeug.utils import secure_filename
 
@@ -46,17 +46,10 @@ def init_db():
           msg_type TEXT DEFAULT 'text', attachment TEXT DEFAULT '', reply_to INTEGER DEFAULT 0,
           reaction TEXT DEFAULT '', pinned INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
           created_at TEXT NOT NULL, read_at TEXT);
-        CREATE TABLE IF NOT EXISTS saved_messages(
-          id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
-          body TEXT NOT NULL, msg_type TEXT DEFAULT 'text', created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS blocks(blocker_id INTEGER, blocked_id INTEGER, PRIMARY KEY(blocker_id, blocked_id));
         CREATE TABLE IF NOT EXISTS groups_chat(id INTEGER PRIMARY KEY, title TEXT NOT NULL, avatar TEXT DEFAULT '',
           owner_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS group_members(group_id INTEGER, user_id INTEGER, role TEXT DEFAULT 'member',
           PRIMARY KEY(group_id,user_id));
-        CREATE TABLE IF NOT EXISTS group_messages(id INTEGER PRIMARY KEY, group_id INTEGER,
-          sender_id INTEGER, body TEXT NOT NULL, msg_type TEXT DEFAULT 'text', reply_to INTEGER DEFAULT 0,
-          reaction TEXT DEFAULT '', created_at TEXT NOT NULL);
         """)
 
 def now():
@@ -122,22 +115,20 @@ def login():
             db().execute("UPDATE users SET online=1,last_seen=? WHERE id=?", (now(),user["id"])); db().commit()
             return redirect(url_for("index"))
         error = "نام کاربری یا رمز عبور نادرست است."
-    return render_template_string(AUTH, title="ورود به پیام‌رسان", error=error, action="login")
+    return render_template_string(AUTH, title="ورود به پیام‌رسان پرو", error=error, action="login")
 
 @app.route("/logout")
 @login_required
 def logout():
     u=current_user()
-    if u:
-        db().execute("UPDATE users SET online=0,last_seen=? WHERE id=?",(now(),u["id"])); db().commit()
+    if u: db().execute("UPDATE users SET online=0,last_seen=? WHERE id=?",(now(),u["id"])); db().commit()
     session.clear()
     return redirect(url_for("login"))
 
 @app.get("/api/me")
 @login_required
 def api_me():
-    u=dict(current_user())
-    return jsonify(u)
+    return jsonify(dict(current_user()))
 
 @app.post("/api/profile")
 @login_required
@@ -202,13 +193,12 @@ def send_message():
     except: return jsonify(error="نامعتبر"),400
     body=str(data.get("body","")).strip()
     msg_type=str(data.get("msg_type","text"))
-    reply_to=int(data.get("reply_to", 0))
-    if not body and msg_type=='text': return jsonify(error="پیام خالی است"),400
-    cur=db().execute("INSERT INTO messages(sender_id,receiver_id,body,msg_type,reply_to,created_at) VALUES(?,?,?,?,?,?)",
-                     (me["id"],rid,body,msg_type,reply_to,now()))
+    if not body: return jsonify(error="پیام خالی است"),400
+    cur=db().execute("INSERT INTO messages(sender_id,receiver_id,body,msg_type,created_at) VALUES(?,?,?,?,?)",
+                     (me["id"],rid,body,msg_type,now()))
     db().commit()
-    msg=dict(id=cur.lastrowid,sender_id=me["id"],receiver_id=rid,body=body,msg_type=msg_type,reply_to=reply_to,
-             reaction='',created_at=now(),sender_username=me["username"],sender_name=me["display_name"],read_at=None,pinned=0)
+    msg=dict(id=cur.lastrowid,sender_id=me["id"],receiver_id=rid,body=body,msg_type=msg_type,
+             reaction='',created_at=now(),sender_username=me["username"],sender_name=me["display_name"],read_at=None)
     socketio.emit("new_message",msg,room=f"user:{rid}")
     socketio.emit("new_message",msg,room=f"user:{me['id']}")
     return jsonify(message=msg)
@@ -271,27 +261,6 @@ def uploaded_file(name):
     from flask import send_from_directory
     return send_from_directory(UPLOAD_DIR,name)
 
-@app.post("/api/groups")
-@login_required
-def create_group():
-    me=current_user(); data=request.get_json(silent=True) or {}
-    title=str(data.get("title","")).strip()[:80]
-    avatar=str(data.get("avatar","")).strip()
-    if not title: return jsonify(error="نام گروه لازم است"),400
-    cur=db().execute("INSERT INTO groups_chat(title,avatar,owner_id,created_at) VALUES(?,?,?,?)",(title,avatar,me["id"],now()))
-    gid=cur.lastrowid
-    db().execute("INSERT INTO group_members(group_id,user_id,role) VALUES(?,?,?)",(gid,me["id"],"admin"))
-    db().commit()
-    return jsonify(id=gid,title=title,avatar=avatar)
-
-@app.get("/api/groups")
-@login_required
-def groups():
-    me=current_user()
-    rows=db().execute("""SELECT g.id,g.title,g.avatar,g.created_at FROM groups_chat g JOIN group_members m ON m.group_id=g.id
-       WHERE m.user_id=? ORDER BY g.id DESC""",(me["id"],)).fetchall()
-    return jsonify(groups=[dict(r) for r in rows])
-
 @socketio.on("connect")
 def on_connect():
     u=current_user()
@@ -310,33 +279,36 @@ AUTH = r"""
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{title}}</title>
 <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Vazirmatn', sans-serif; }
 body { background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #f8fafc; padding: 16px; }
-.auth-card { width: min(400px, 100%); background: #1e293b; padding: 32px 24px; border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
-input { width: 100%; padding: 12px; margin-bottom: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; color: white; outline: none; }
-button { width: 100%; padding: 12px; background: #2AABEE; border: none; border-radius: 10px; color: white; font-weight: bold; cursor: pointer; }
-.error { background: rgba(239,68,68,0.2); color: #fca5a5; padding: 8px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
-a { color: #2AABEE; text-decoration: none; font-size: 13px; }
+.auth-card { width: min(400px, 100%); background: #1e293b; padding: 32px 24px; border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
+input { width: 100%; padding: 12px 16px; margin-bottom: 14px; background: #0b132b; border: 1px solid #334155; border-radius: 12px; color: white; outline: none; transition: 0.2s; }
+input:focus { border-color: #2AABEE; box-shadow: 0 0 0 3px rgba(42,171,238,0.2); }
+button { width: 100%; padding: 12px; background: #2AABEE; border: none; border-radius: 12px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+button:hover { background: #229ed9; }
+.error { background: rgba(239,68,68,0.15); color: #fca5a5; padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; border: 1px solid rgba(239,68,68,0.3); }
+a { color: #2AABEE; text-decoration: none; font-size: 13px; font-weight: 500; }
+a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 <div class="auth-card">
-  <h2 style="margin-bottom: 16px;">{{title}}</h2>
+  <h2 style="margin-bottom: 20px; font-weight: 700; color: #f1f5f9;">{{title}}</h2>
   {% if error %}<div class="error">{{error}}</div>{% endif %}
   <form method="post">
     {% if action=='register' %}
-    <input name="display_name" placeholder="نام نمایشی" required>
+    <input name="display_name" placeholder="نام و نام خانوادگی" required>
     {% endif %}
-    <input name="username" placeholder="نام کاربری (آیدی)" required>
+    <input name="username" placeholder="نام کاربری (آیدی بدون @)" required>
     <input name="password" type="password" placeholder="رمز عبور" required>
     <button type="submit">{{title}}</button>
   </form>
-  <div style="margin-top: 16px;">
-    {% if action=='login' %}<a href="{{url_for('register')}}">ساخت حساب جدید</a>{% else %}<a href="{{url_for('login')}}">ورود به حساب</a>{% endif %}
+  <div style="margin-top: 18px;">
+    {% if action=='login' %}<a href="{{url_for('register')}}">حساب کاربری ندارید؟ ثبت‌نام</a>{% else %}<a href="{{url_for('login')}}">قبلاً ثبت‌نام کرده‌اید؟ ورود</a>{% endif %}
   </div>
 </div>
 </body>
@@ -362,74 +334,81 @@ PAGE = r"""
   --bubble-out: #2b5278;
   --bubble-in: #182533;
   --text-muted: #8eabbf;
+  --border-color: #0f151d;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Vazirmatn', sans-serif; -webkit-tap-highlight-color: transparent; }
 body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-fill-available; overflow: hidden; display: flex; }
 
 .tg-app { display: flex; width: 100vw; height: 100%; position: relative; }
 
-/* Left Folder Bar */
-.folder-rail { width: 60px; background: #0e1621; border-left: 1px solid #101921; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 12px; z-index: 15; flex-shrink: 0; }
-.folder-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; color: var(--text-muted); cursor: pointer; }
-.folder-icon.active { background: #17212b; color: var(--accent); }
+/* Left Nav Rail */
+.folder-rail { width: 64px; background: #0e1621; border-left: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 14px; z-index: 15; flex-shrink: 0; }
+.folder-icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+.folder-icon:hover { background: var(--panel-hover); color: white; }
+.folder-icon.active { background: var(--panel-bg); color: var(--accent); }
 
-/* Slide Menu Overlay & Drawer */
-.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; display: none; }
+/* Slide Menu Drawer */
+.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 90; display: none; backdrop-filter: blur(2px); }
 .drawer-overlay.active { display: block; }
 .hamburger-menu {
-  position: fixed; top: 0; right: -300px; width: 280px; height: 100%;
-  background: var(--panel-bg); z-index: 100; transition: right 0.25s ease;
-  display: flex; flex-direction: column;
+  position: fixed; top: 0; right: -320px; width: 300px; height: 100%;
+  background: var(--panel-bg); z-index: 100; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column; border-left: 1px solid #232e3c;
 }
 .hamburger-menu.open { right: 0; }
-.menu-header { background: #232e3c; padding: 20px; position: relative; }
-.close-menu-btn { position: absolute; left: 14px; top: 14px; background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
-.menu-avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-size: 20px; font-weight: bold; background-size: cover; background-position: center; margin-bottom: 8px; }
+.menu-header { background: #202b38; padding: 24px 20px; position: relative; border-bottom: 1px solid var(--border-color); }
+.close-menu-btn { position: absolute; left: 16px; top: 16px; background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 6px; border-radius: 50%; display: grid; place-items: center; }
+.close-menu-btn:hover { background: rgba(255,255,255,0.1); }
+.menu-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-size: 22px; font-weight: bold; background-size: cover; background-position: center; margin-bottom: 12px; }
 
-.menu-item { padding: 14px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 14px; color: #d7e1ed; text-decoration: none; }
+.menu-items { padding: 8px 0; flex: 1; }
+.menu-item { padding: 14px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; font-size: 14px; color: #e2e8f0; text-decoration: none; transition: 0.15s; }
 .menu-item:hover { background: var(--panel-hover); }
 
-/* Sidebar */
-.sidebar { width: 320px; background: var(--panel-bg); border-left: 1px solid #0e1621; display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
-.sidebar-header { padding: 10px; display: flex; align-items: center; gap: 8px; }
-.search-container { flex: 1; background: #0e1621; border-radius: 20px; display: flex; align-items: center; padding: 0 12px; height: 36px; }
+/* Sidebar Chats */
+.sidebar { width: 340px; background: var(--panel-bg); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
+.sidebar-header { padding: 12px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border-color); }
+.search-container { flex: 1; background: var(--bg-main); border-radius: 20px; display: flex; align-items: center; padding: 0 14px; height: 38px; }
 .search-container input { width: 100%; background: none; border: none; color: white; outline: none; font-size: 13px; }
 
 .chat-list { flex: 1; overflow-y: auto; }
-.chat-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; }
-.chat-row:hover, .chat-row.active { background: var(--panel-hover); }
-.avatar { width: 46px; height: 46px; border-radius: 50%; background: #2b5278; display: grid; place-items: center; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; }
+.chat-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; transition: 0.15s; }
+.chat-row:hover { background: var(--panel-hover); }
+.chat-row.active { background: var(--active-bg); }
+.avatar { width: 48px; height: 48px; border-radius: 50%; background: #2b5278; display: grid; place-items: center; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; font-size: 16px; color: white; }
 
-/* Main Chat Panel */
+/* Main Chat Area */
 .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; height: 100%; min-width: 0; }
-.chat-topbar { padding: 8px 14px; background: var(--panel-bg); border-bottom: 1px solid #0e1621; display: flex; align-items: center; justify-content: space-between; height: 56px; flex-shrink: 0; }
-.chat-topbar-info { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
-.back-btn-mobile { display: none; background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
+.chat-topbar { padding: 10px 16px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; height: 60px; flex-shrink: 0; }
+.chat-topbar-info { display: flex; align-items: center; gap: 12px; cursor: pointer; min-width: 0; }
+.back-btn-mobile { display: none; background: none; border: none; color: white; font-size: 22px; cursor: pointer; }
 
-.chat-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
-.message-bubble { max-width: 78%; padding: 8px 12px; border-radius: 12px; font-size: 14px; position: relative; word-break: break-word; }
-.message-bubble.mine { align-self: flex-end; background: var(--bubble-out); }
-.message-bubble:not(.mine) { align-self: flex-start; background: var(--bubble-in); }
-.msg-time { font-size: 10px; color: rgba(255,255,255,0.6); float: left; margin-top: 4px; margin-right: 6px; display: flex; align-items: center; gap: 3px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: radial-gradient(circle at center, #0e1621 0%, #080c12 100%); }
+.message-bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; position: relative; word-break: break-word; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+.message-bubble.mine { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
+.message-bubble:not(.mine) { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
+.msg-time { font-size: 10px; color: rgba(255,255,255,0.6); float: left; margin-top: 4px; margin-left: 6px; display: flex; align-items: center; gap: 3px; }
 
-/* Fixed Bottom Composer (Mobile Fix) */
-.chat-composer { padding: 8px 12px; background: var(--panel-bg); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.composer-input { flex: 1; background: var(--bg-main); border: none; border-radius: 12px; color: white; padding: 10px 12px; font-size: 14px; outline: none; resize: none; height: 42px; max-height: 100px; }
-.action-btn { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; padding: 6px; border-radius: 50%; flex-shrink: 0; }
+/* Composer / Input Area */
+.chat-composer { padding: 12px 16px; background: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.composer-input { flex: 1; background: var(--bg-main); border: none; border-radius: 12px; color: white; padding: 10px 14px; font-size: 14px; outline: none; resize: none; height: 44px; max-height: 120px; }
+.action-btn { background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; padding: 6px; border-radius: 50%; flex-shrink: 0; transition: 0.15s; }
+.action-btn:hover { color: white; background: rgba(255,255,255,0.05); }
 
-/* Modals & Popups */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; z-index: 1000; padding: 16px; }
-.modal-card { width: min(420px, 100%); background: var(--panel-bg); border: 1px solid #232e3c; padding: 20px; border-radius: 16px; max-height: 90vh; overflow-y: auto; }
+/* Modals */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: grid; place-items: center; z-index: 1000; padding: 16px; backdrop-filter: blur(4px); }
+.modal-card { width: min(420px, 100%); background: var(--panel-bg); border: 1px solid #232e3c; padding: 24px; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto; }
 .hidden { display: none !important; }
 
-.reaction-bar { display: flex; gap: 8px; background: var(--panel-bg); padding: 6px; border-radius: 20px; border: 1px solid #232e3c; margin-top: 4px; }
-.reaction-btn { background: none; border: none; font-size: 16px; cursor: pointer; }
+.reaction-bar { display: flex; gap: 8px; background: var(--panel-bg); padding: 8px 12px; border-radius: 24px; border: 1px solid #232e3c; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.reaction-btn { background: none; border: none; font-size: 18px; cursor: pointer; transition: transform 0.1s; }
+.reaction-btn:hover { transform: scale(1.2); }
 
 @media (max-width: 768px) {
-  .folder-rail { width: 52px; }
-  .sidebar { width: calc(100vw - 52px); position: absolute; right: 52px; top: 0; height: 100%; z-index: 5; }
+  .folder-rail { width: 56px; }
+  .sidebar { width: calc(100vw - 56px); position: absolute; right: 56px; top: 0; height: 100%; z-index: 5; }
   .sidebar.mobile-hidden { display: none; }
-  .chat-main { width: 100vw; position: absolute; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s ease; }
+  .chat-main { width: 100vw; position: absolute; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
   .chat-main.mobile-active { transform: translateX(0); }
   .back-btn-mobile { display: inline-block; }
 }
@@ -438,66 +417,74 @@ body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-
 <body>
 
 <div class="tg-app">
+  <!-- Left Nav Rail -->
   <div class="folder-rail">
-    <div class="folder-icon active" id="fAll" onclick="switchFolder('all')">💬</div>
-    <div class="folder-icon" id="fGroups" onclick="switchFolder('groups')">👥</div>
+    <div class="folder-icon active" id="fAll" onclick="switchFolder('all')" title="گفتگوها">💬</div>
+    <div class="folder-icon" onclick="openProfileModal()" title="تنظیمات پروفایل">⚙️</div>
   </div>
 
+  <!-- Slide Menu Drawer -->
   <div class="drawer-overlay" id="drawerOverlay" onclick="toggleMenu()"></div>
   <div class="hamburger-menu" id="hamburgerMenu">
     <div class="menu-header">
-      <button class="close-menu-btn" onclick="toggleMenu()">✖</button>
+      <button class="close-menu-btn" onclick="toggleMenu()">✕</button>
       <div class="menu-avatar" id="mAvatar"></div>
-      <div style="font-weight: bold;" id="mName"></div>
-      <div style="font-size: 12px; color: var(--text-muted);" id="mUser"></div>
+      <div style="font-weight: 700; font-size: 16px;" id="mName"></div>
+      <div style="font-size: 13px; color: var(--accent); margin-top: 2px;" id="mUser"></div>
     </div>
     <div class="menu-items">
-      <div class="menu-item" onclick="openCreateGroupModal()"><span>👥</span> گروه جدید</div>
-      <div class="menu-item" onclick="openProfileModal()"><span>👤</span> تنظیمات پروفایل</div>
-      <a href="{{url_for('logout')}}" class="menu-item" style="color: #ff6961;"><span>🚪</span> خروج</a>
+      <div class="menu-item" onclick="toggleMenu(); openProfileModal()"><span>👤</span> تنظیمات پروفایل</div>
+      <a href="{{url_for('logout')}}" class="menu-item" style="color: #ff6b6b;"><span>🚪</span> خروج از حساب</a>
     </div>
   </div>
 
+  <!-- Sidebar -->
   <aside class="sidebar" id="sidebarPanel">
     <div class="sidebar-header">
-      <button class="action-btn" onclick="toggleMenu()">☰</button>
+      <button class="action-btn" onclick="toggleMenu()" title="منو">☰</button>
       <div class="search-container">
-        <input id="searchInput" placeholder="جستجو آیدی یا نام..." oninput="searchUsers()">
+        <input id="searchInput" placeholder="جستجو آیدی (مثلا ali)..." oninput="searchUsers()">
       </div>
     </div>
     <div class="chat-list" id="chatList"></div>
   </aside>
 
+  <!-- Main Chat Panel -->
   <main class="chat-main" id="chatMainPanel">
     <header class="chat-topbar">
       <div class="chat-topbar-info" onclick="openHeaderProfile()">
         <button class="back-btn-mobile" onclick="closeChatMobile(event)">⬅</button>
-        <div class="avatar" id="activeAvatar" style="width:36px; height:36px;">💬</div>
+        <div class="avatar" id="activeAvatar" style="width:40px; height:40px;">💬</div>
         <div>
-          <div style="font-size:14px; font-weight:bold;" id="chatTitle">تلگرام پرو</div>
-          <div style="font-size:11px; color:var(--text-muted);" id="chatStatus">انتخاب گفتگو</div>
+          <div style="font-size:15px; font-weight:700;" id="chatTitle">تلگرام پرو</div>
+          <div style="font-size:12px; color: var(--text-muted);" id="chatStatus">لطفاً یک گفتگو انتخاب کنید</div>
         </div>
       </div>
     </header>
 
-    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-messages" id="chatMessages">
+      <div style="margin: auto; text-align: center; color: var(--text-muted); font-size: 14px;">
+        یک مخاطب را از جستجو یا لیست انتخاب کنید تا چت آغاز شود 🚀
+      </div>
+    </div>
 
     <form class="chat-composer" onsubmit="sendMessage(event)">
-      <button type="button" class="action-btn" onclick="$('fileInput').click()">📎</button>
+      <button type="button" class="action-btn" onclick="$('fileInput').click()" title="ارسال فایل/عکس">📎</button>
       <input type="file" id="fileInput" hidden onchange="handleFileUpload(this)">
       <textarea id="messageInput" class="composer-input" placeholder="نوشتن پیام..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
-      <button type="submit" class="action-btn" style="color:var(--accent);">➤</button>
+      <button type="submit" class="action-btn" style="color: var(--accent);" title="ارسال">➤</button>
     </form>
   </main>
 </div>
 
+<!-- Modal Container -->
 <div id="modalOverlay" class="modal-overlay hidden" onclick="if(event.target===this) closeModal()">
   <div class="modal-card" id="modalContent"></div>
 </div>
 
 <script>
 const meId = {{me['id']}};
-let activeUser = null, activeGroup = null, currentFolder = 'all', editingMsgId = null, replyMsgId = null;
+let activeUser = null;
 const $ = id => document.getElementById(id);
 
 function toggleMenu() {
@@ -523,20 +510,19 @@ async function init() {
 }
 
 async function loadDialogs() {
-  if(currentFolder === 'groups') return loadGroups();
   let d = await api('/api/dialogs');
   $('chatList').innerHTML = d.dialogs.map(u => `
     <div class="chat-row ${activeUser?.id===u.id?'active':''}" onclick="openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')">
       <div class="avatar" style="${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
       <div style="flex:1; min-width:0;">
-        <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+        <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;">
           <span>${esc(u.display_name)}</span>
-          <span style="font-size:10px; color:var(--text-muted);">${(u.last_time||'').slice(11,16)}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${(u.last_time||'').slice(11,16)}</span>
         </div>
-        <div style="font-size:12px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(u.last_msg)}</div>
+        <div style="font-size:13px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">${esc(u.last_msg)}</div>
       </div>
     </div>
-  `).join('') || '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:13px;">چتی یافت نشد.</div>';
+  `).join('') || '<div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">هنوز گفتگویی ندارید.<br>از طریق جستجو آیدی مخاطب را پیدا کنید.</div>';
 }
 
 async function searchUsers() {
@@ -547,23 +533,26 @@ async function searchUsers() {
     <div class="chat-row" onclick="openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')">
       <div class="avatar" style="${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
       <div>
-        <div style="font-size:13px; font-weight:600;">${esc(u.display_name)}</div>
-        <div style="font-size:11px; color:var(--text-muted);">@${esc(u.username)}</div>
+        <div style="font-size:14px; font-weight:600;">${esc(u.display_name)}</div>
+        <div style="font-size:12px; color:var(--accent);">@${esc(u.username)}</div>
       </div>
     </div>
-  `).join('');
+  `).join('') || '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:13px;">کاربری پیدا نشد.</div>';
 }
 
 async function openUserChat(id, name, username, avatar) {
-  activeGroup = null; activeUser = {id, name, username, avatar};
+  activeUser = {id, name, username, avatar};
   $('chatTitle').textContent = name;
-  $('chatStatus').textContent = 'آخرین بازدید اخیراً';
+  $('chatStatus').textContent = '@' + username;
   if(avatar) $('activeAvatar').style.backgroundImage = `url('${avatar}')`;
-  else $('activeAvatar').textContent = name[0];$('chatMessages').innerHTML = '';
+  else { $('activeAvatar').style.backgroundImage = '';$('activeAvatar').textContent = name[0]; }
+  
   let d = await api('/api/messages/' + id);
+  $('chatMessages').innerHTML = '';
   d.messages.forEach(appendMessage);
   scrollBottom();
   if(window.innerWidth <= 768) $('chatMainPanel').classList.add('mobile-active');
+  loadDialogs();
 }
 
 function appendMessage(m) {
@@ -573,30 +562,31 @@ function appendMessage(m) {
   
   let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
   let bodyHtml = esc(m.body);
-  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; border-radius:8px;">`;
+  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; border-radius:10px; display:block;">`;
   
   el.innerHTML = `
     <div>${bodyHtml}</div>
     <div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>
-    ${m.reaction ? `<div style="font-size:12px; margin-top:2px;">${m.reaction}</div>` : ''}
+    ${m.reaction ? `<div style="font-size:13px; margin-top:4px;">${m.reaction}</div>` : ''}
   `;
-  
   el.onclick = () => showMessageMenu(m);
   $('chatMessages').appendChild(el);
 }
 
 function showMessageMenu(m) {
   $('modalContent').innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <div class="reaction-bar">
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="text-align:center; font-size:13px; color:var(--text-muted); margin-bottom:4px;">واکنش سریع</div>
+      <div class="reaction-bar" style="justify-content:center;">
         <button class="reaction-btn" onclick="reactMsg(${m.id},'👍')">👍</button>
         <button class="reaction-btn" onclick="reactMsg(${m.id},'❤️')">❤️</button>
         <button class="reaction-btn" onclick="reactMsg(${m.id},'😂')">😂</button>
         <button class="reaction-btn" onclick="reactMsg(${m.id},'🔥')">🔥</button>
+        <button class="reaction-btn" onclick="reactMsg(${m.id},'👏')">👏</button>
       </div>
-      ${m.sender_id === meId ? `<button onclick="editMsgPrompt(${m.id},'${esc(m.body)}')">ویرایش پیام</button>` : ''}
-      ${m.sender_id === meId ? `<button onclick="deleteMsg(${m.id})" style="color:red;">حذف پیام</button>` : ''}
-      <button onclick="closeModal()">انصراف</button>
+      ${m.sender_id === meId ? `<button onclick="editMsgPrompt(${m.id},'${esc(m.body)}')" style="padding:10px; background:#1e293b; border:1px solid #334155; color:white; border-radius:10px; cursor:pointer;">ویرایش پیام</button>` : ''}
+      ${m.sender_id === meId ? `<button onclick="deleteMsg(${m.id})" style="padding:10px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; border-radius:10px; cursor:pointer;">حذف پیام</button>` : ''}
+      <button onclick="closeModal()" style="padding:10px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer; margin-top:6px;">بستن</button>
     </div>
   `;
   $('modalOverlay').classList.remove('hidden');
@@ -605,10 +595,9 @@ function showMessageMenu(m) {
 async function reactMsg(id, r) { await api(`/api/messages/${id}/react`, {method:'POST', body:JSON.stringify({reaction:r})}); closeModal(); reloadChat(); }
 async function deleteMsg(id) { await api(`/api/messages/${id}/delete`, {method:'POST'}); closeModal(); reloadChat(); }
 async function editMsgPrompt(id, old) {
-  let txt = prompt('متن جدید:', old);
+  let txt = prompt('متن جدید پیام:', old);
   if(txt) { await api(`/api/messages/${id}/edit`, {method:'POST', body:JSON.stringify({body:txt})}); closeModal(); reloadChat(); }
 }
-
 async function reloadChat() { if(activeUser) openUserChat(activeUser.id, activeUser.name, activeUser.username, activeUser.avatar); }
 
 async function sendMessage(e) {
@@ -619,6 +608,7 @@ async function sendMessage(e) {
   appendMessage(d.message);
   $('messageInput').value = '';
   scrollBottom();
+  loadDialogs();
 }
 
 async function handleFileUpload(input) {
@@ -630,45 +620,44 @@ async function handleFileUpload(input) {
     let m = await api('/api/messages', {method:'POST', body:JSON.stringify({receiver_id: activeUser.id, body: location.origin + d.url, msg_type: 'image'})});
     appendMessage(m.message);
     scrollBottom();
+    loadDialogs();
   }
 }
 
-async function openCreateGroupModal() {
-  toggleMenu();
+async function openProfileModal() {
+  let me = await api('/api/me');
   $('modalContent').innerHTML = `
-    <h3>ساخت گروه جدید</h3>
-    <input id="gName" placeholder="نام گروه" style="width:100%; padding:10px; margin:10px 0; background:#0e1621; border:1px solid #334155; color:white; border-radius:8px;">
-    <button onclick="submitGroup()" style="width:100%; padding:10px; background:var(--accent); border:none; color:white; border-radius:8px; font-weight:bold;">ایجاد گروه</button>
+    <h3 style="margin-bottom:16px; font-weight:700;">تنظیمات پروفایل</h3>
+    <form onsubmit="updateProfile(event)" style="display:flex; flex-direction:column; gap:12px;">
+      <div>
+        <label style="font-size:12px; color:var(--text-muted);">نام نمایشی</label>
+        <input id="pName" value="${esc(me.display_name)}" style="width:100%; padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; margin-top:4px;" required>
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--text-muted);">بیوگرافی</label>
+        <textarea id="pBio" style="width:100%; padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; margin-top:4px; height:70px; resize:none;">${esc(me.bio||'')}</textarea>
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--text-muted);">لینک عکس پروفایل (URL)</label>
+        <input id="pAvatar" value="${esc(me.avatar||'')}" placeholder="https://..." style="width:100%; padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; margin-top:4px;">
+      </div>
+      <button type="submit" style="width:100%; padding:12px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer; margin-top:6px;">ذخیره تغییرات</button>
+    </form>
   `;
   $('modalOverlay').classList.remove('hidden');
 }
 
-async function submitGroup() {
-  let title = $('gName').value.trim();
-  if(!title) return;
-  await api('/api/groups', {method:'POST', body:JSON.stringify({title})});
+async function updateProfile(e) {
+  e.preventDefault();
+  let data = {
+    display_name: $('pName').value.trim(),
+    bio: $('pBio').value.trim(),
+    avatar: $('pAvatar').value.trim(),
+    phone: '', birthday: ''
+  };
+  await api('/api/profile', {method:'POST', body:JSON.stringify(data)});
   closeModal();
-  switchFolder('groups');
-}
-
-async function loadGroups() {
-  let d = await api('/api/groups');
-  $('chatList').innerHTML = d.groups.map(g => `
-    <div class="chat-row" onclick="alert('پیام‌رسانی گروهی فعال است')">
-      <div class="avatar">👥</div>
-      <div>
-        <div style="font-size:13px; font-weight:600;">${esc(g.title)}</div>
-        <div style="font-size:11px; color:var(--text-muted);">گروه</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function switchFolder(f) {
-  currentFolder = f;
-  $('fAll').classList.toggle('active', f==='all');
-  $('fGroups').classList.toggle('active', f==='groups');
-  loadDialogs();
+  init();
 }
 
 async function openHeaderProfile() {
@@ -677,16 +666,17 @@ async function openHeaderProfile() {
   let u = d.users.find(x => x.id === activeUser.id) || activeUser;
   $('modalContent').innerHTML = `
     <div style="text-align:center;">
-      <div class="avatar" style="width:64px; height:64px; margin:0 auto 10px; ${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
-      <h4>${esc(u.display_name)}</h4>
-      <div style="color:var(--accent); font-size:12px;">@${esc(u.username)}</div>
-      <p style="margin:10px 0; font-size:13px; color:var(--text-muted);">${esc(u.bio||'بدون بیوگرافی')}</p>
-      <button onclick="closeModal()" style="width:100%; padding:8px; background:var(--accent); border:none; color:white; border-radius:8px;">بستن</button>
+      <div class="avatar" style="width:72px; height:72px; margin:0 auto 12px; font-size:24px; ${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
+      <h3 style="font-weight:700;">${esc(u.display_name)}</h3>
+      <div style="color:var(--accent); font-size:13px; margin-top:2px;">@${esc(u.username)}</div>
+      <p style="margin:14px 0; font-size:13px; color:var(--text-muted); background:#0e1621; padding:10px; border-radius:10px;">${esc(u.bio||'بدون بیوگرافی')}</p>
+      <button onclick="closeModal()" style="width:100%; padding:10px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer;">بستن</button>
     </div>
   `;
   $('modalOverlay').classList.remove('hidden');
 }
 
+function switchFolder(f) { loadDialogs(); }
 function scrollBottom() { $('chatMessages').scrollTop = $('chatMessages').scrollHeight; }
 function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
