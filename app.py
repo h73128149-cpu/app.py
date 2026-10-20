@@ -46,7 +46,31 @@ def init_db():
           msg_type TEXT DEFAULT 'text', attachment TEXT DEFAULT '', reply_to INTEGER DEFAULT 0,
           reaction TEXT DEFAULT '', pinned INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
           created_at TEXT NOT NULL, read_at TEXT);
+        CREATE TABLE IF NOT EXISTS user_blocks(
+          blocker_id INTEGER NOT NULL REFERENCES users(id), blocked_id INTEGER NOT NULL REFERENCES users(id),
+          PRIMARY KEY(blocker_id, blocked_id));
+        CREATE TABLE IF NOT EXISTS hidden_chats(
+          user_id INTEGER NOT NULL REFERENCES users(id), other_id INTEGER NOT NULL REFERENCES users(id),
+          PRIMARY KEY(user_id, other_id));
+        CREATE TABLE IF NOT EXISTS user_settings(
+          user_id INTEGER PRIMARY KEY REFERENCES users(id), chat_background TEXT DEFAULT '',
+          show_last_seen INTEGER DEFAULT 1, theme TEXT DEFAULT 'dark');
+        CREATE TABLE IF NOT EXISTS chat_groups(
+          id INTEGER PRIMARY KEY, title TEXT NOT NULL, owner_id INTEGER NOT NULL REFERENCES users(id),
+          created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS group_members(
+          group_id INTEGER NOT NULL REFERENCES chat_groups(id), user_id INTEGER NOT NULL REFERENCES users(id),
+          PRIMARY KEY(group_id,user_id));
+        CREATE TABLE IF NOT EXISTS group_messages(
+          id INTEGER PRIMARY KEY, group_id INTEGER NOT NULL REFERENCES chat_groups(id),
+          sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT DEFAULT '',
+          msg_type TEXT DEFAULT 'text', created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS group_invites(
+          id INTEGER PRIMARY KEY, group_id INTEGER NOT NULL REFERENCES chat_groups(id),
+          token TEXT UNIQUE NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
         """)
+        # Ensure settings exist for existing accounts
+        c.execute("INSERT OR IGNORE INTO user_settings(user_id) SELECT id FROM users")
 
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -149,13 +173,14 @@ def get_dialogs():
                m.body as last_msg, m.created_at as last_time, m.read_at, m.sender_id
         FROM users u
         JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.receiver_id = u.id AND m.sender_id = ?)
-        WHERE m.id IN (
+        WHERE NOT EXISTS (SELECT 1 FROM hidden_chats h WHERE h.user_id=? AND h.other_id=u.id)
+          AND m.id IN (
             SELECT MAX(id) FROM messages 
             WHERE sender_id = ? OR receiver_id = ?
             GROUP BY CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END
         )
         ORDER BY m.id DESC
-    """, (me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
+    """, (me["id"], me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
     
     dialogs = [dict(r) for r in rows]
     # Ensure Saved Messages is always present
@@ -175,7 +200,14 @@ def search_users():
     rows=db().execute("""SELECT id,username,display_name,bio,avatar,phone,birthday,online,last_seen FROM users
        WHERE id!=? AND (username LIKE ? OR display_name LIKE ?) ORDER BY online DESC LIMIT 30""",
        (me["id"],f"%{q}%",f"%{q}%")).fetchall()
-    return jsonify(users=[dict(r) for r in rows])
+    users=[]
+    for r in rows:
+        item=dict(r)
+        setting=db().execute("SELECT show_last_seen FROM user_settings WHERE user_id=?",(item["id"],)).fetchone()
+        if setting and not setting["show_last_seen"]:
+            item["last_seen"]=None
+        users.append(item)
+    return jsonify(users=users)
 
 @app.get("/api/messages/<int:other_id>")
 @login_required
@@ -201,6 +233,10 @@ def send_message():
     body=str(data.get("body","")).strip()
     msg_type=str(data.get("msg_type","text"))
     if not body: return jsonify(error="پیام خالی است"),400
+    if rid != me["id"]:
+        blocked = db().execute("SELECT 1 FROM user_blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)",
+                               (me["id"],rid,rid,me["id"])).fetchone()
+        if blocked: return jsonify(error="ارسال پیام به این کاربر ممکن نیست؛ یکی از طرفین بلاک کرده است."),403
     cur=db().execute("INSERT INTO messages(sender_id,receiver_id,body,msg_type,created_at) VALUES(?,?,?,?,?)",
                      (me["id"],rid,body,msg_type,now()))
     db().commit()
@@ -268,6 +304,114 @@ def upload():
 def uploaded_file(name):
     from flask import send_from_directory
     return send_from_directory(UPLOAD_DIR,name)
+
+
+@app.get("/api/settings")
+@login_required
+def get_settings():
+    u=current_user()
+    db().execute("INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)",(u["id"],))
+    row=db().execute("SELECT * FROM user_settings WHERE user_id=?",(u["id"],)).fetchone()
+    return jsonify(dict(row))
+
+@app.post("/api/settings")
+@login_required
+def save_settings():
+    u=current_user(); data=request.get_json(silent=True) or {}
+    bg=str(data.get("chat_background","")).strip()[:500]
+    if bg and not (re.fullmatch(r"#[0-9a-fA-F]{3,8}",bg) or bg.startswith("https://") or bg.startswith("http://")):
+        return jsonify(error="پس‌زمینه باید رنگ HEX یا لینک تصویر باشد"),400
+    db().execute("INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)",(u["id"],))
+    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=? WHERE user_id=?",
+                 (bg,1 if data.get("show_last_seen") else 0,u["id"]))
+    db().commit()
+    return jsonify(ok=True)
+
+@app.post("/api/block/<int:other_id>")
+@login_required
+def block_user(other_id):
+    me=current_user()
+    if other_id==me["id"]: return jsonify(error="نمی‌توانی خودت را بلاک کنی"),400
+    if not db().execute("SELECT id FROM users WHERE id=?",(other_id,)).fetchone(): return jsonify(error="کاربر پیدا نشد"),404
+    db().execute("INSERT OR IGNORE INTO user_blocks(blocker_id,blocked_id) VALUES(?,?)",(me["id"],other_id))
+    db().commit()
+    return jsonify(ok=True)
+
+@app.delete("/api/chats/<int:other_id>")
+@login_required
+def delete_chat(other_id):
+    me=current_user()
+    db().execute("INSERT OR IGNORE INTO hidden_chats(user_id,other_id) VALUES(?,?)",(me["id"],other_id))
+    db().commit()
+    return jsonify(ok=True)
+
+@app.post("/api/groups")
+@login_required
+def create_group():
+    me=current_user(); data=request.get_json(silent=True) or {}
+    title=str(data.get("title","")).strip()[:80]
+    if not title: return jsonify(error="نام گروه را وارد کن"),400
+    cur=db().execute("INSERT INTO chat_groups(title,owner_id,created_at) VALUES(?,?,?)",(title,me["id"],now()))
+    gid=cur.lastrowid
+    db().execute("INSERT INTO group_members(group_id,user_id) VALUES(?,?)",(gid,me["id"]))
+    members=data.get("members",[])
+    if not isinstance(members,list): members=[]
+    for raw in members[:100]:
+        try: uid=int(raw)
+        except (TypeError,ValueError): continue
+        if db().execute("SELECT id FROM users WHERE id=?",(uid,)).fetchone():
+            db().execute("INSERT OR IGNORE INTO group_members(group_id,user_id) VALUES(?,?)",(gid,uid))
+    db().commit()
+    return jsonify(ok=True,id=gid,title=title)
+
+@app.get("/api/groups")
+@login_required
+def list_groups():
+    me=current_user()
+    rows=db().execute("""SELECT g.id,g.title,g.owner_id,g.created_at FROM chat_groups g
+        JOIN group_members gm ON gm.group_id=g.id WHERE gm.user_id=? ORDER BY g.id DESC""",(me["id"],)).fetchall()
+    return jsonify(groups=[dict(r) for r in rows])
+
+@app.get("/api/groups/<int:gid>/messages")
+@login_required
+def get_group_messages(gid):
+    me=current_user()
+    member=db().execute("SELECT 1 FROM group_members WHERE group_id=? AND user_id=?",(gid,me["id"])).fetchone()
+    if not member: return jsonify(error="عضو این گروه نیستی"),403
+    rows=db().execute("SELECT gm.*,u.username sender_username,u.display_name sender_name FROM group_messages gm JOIN users u ON u.id=gm.sender_id WHERE gm.group_id=? ORDER BY gm.id ASC LIMIT 500",(gid,)).fetchall()
+    return jsonify(messages=[dict(r) for r in rows])
+
+@app.post("/api/groups/<int:gid>/messages")
+@login_required
+def send_group_message(gid):
+    me=current_user(); data=request.get_json(silent=True) or {}
+    body=str(data.get("body","")).strip(); msg_type=str(data.get("msg_type","text"))
+    if not body: return jsonify(error="پیام خالی است"),400
+    member=db().execute("SELECT 1 FROM group_members WHERE group_id=? AND user_id=?",(gid,me["id"])).fetchone()
+    if not member: return jsonify(error="عضو این گروه نیستی"),403
+    cur=db().execute("INSERT INTO group_messages(group_id,sender_id,body,msg_type,created_at) VALUES(?,?,?,?,?)",(gid,me["id"],body,msg_type,now()))
+    db().commit()
+    msg=dict(id=cur.lastrowid,group_id=gid,sender_id=me["id"],body=body,msg_type=msg_type,created_at=now(),sender_username=me["username"],sender_name=me["display_name"])
+    members=db().execute("SELECT user_id FROM group_members WHERE group_id=?",(gid,)).fetchall()
+    for member in members: socketio.emit("group_message",msg,room=f"user:{member['user_id']}")
+    return jsonify(message=msg)
+
+@app.post("/api/groups/<int:gid>/members")
+@login_required
+def add_group_members(gid):
+    me=current_user(); data=request.get_json(silent=True) or {}
+    group=db().execute("SELECT owner_id FROM chat_groups WHERE id=?",(gid,)).fetchone()
+    if not group: return jsonify(error="گروه پیدا نشد"),404
+    if group["owner_id"]!=me["id"]: return jsonify(error="فقط سازنده گروه می‌تواند عضو اضافه کند"),403
+    members=data.get("members",[])
+    if not isinstance(members,list): return jsonify(error="فهرست اعضا نامعتبر است"),400
+    added=0
+    for raw in members[:100]:
+        try: uid=int(raw)
+        except (TypeError,ValueError): continue
+        if db().execute("SELECT 1 FROM users WHERE id=?",(uid,)).fetchone():
+            db().execute("INSERT OR IGNORE INTO group_members(group_id,user_id) VALUES(?,?)",(gid,uid)); added+=1
+    db().commit(); return jsonify(ok=True,added=added)
 
 @socketio.on("connect")
 def on_connect():
@@ -411,7 +555,8 @@ button { touch-action: manipulation; }
 <div class="tg-app">
   <div class="folder-rail">
     <div class="folder-icon active" onclick="switchFolder('all')">💬</div>
-    <div class="folder-icon" onclick="openProfileModal()">⚙️</div>
+    <div class="folder-icon" onclick="openProfileModal()" title="تنظیمات">⚙️</div>
+    <div class="folder-icon" onclick="createGroup()" title="ساخت گروه">👥</div>
   </div>
 
   <aside class="sidebar" id="sidebarPanel">
@@ -440,8 +585,9 @@ button { touch-action: manipulation; }
     </div>
 
     <form class="chat-composer" onsubmit="sendMessage(event)">
-      <button type="button" class="action-btn" onclick="$('fileInput').click()">📎</button>
+      <button type="button" class="action-btn" onclick="$('fileInput').click()" title="ارسال فایل">📎</button>
       <input type="file" id="fileInput" hidden onchange="handleFileUpload(this)">
+      <button type="button" class="action-btn" id="voiceBtn" onclick="toggleVoiceRecording()" title="ضبط پیام صوتی">🎙️</button>
       <textarea id="messageInput" class="composer-input" placeholder="نوشتن پیام..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
       <button type="submit" class="action-btn" style="color: var(--accent);">➤</button>
     </form>
@@ -455,6 +601,7 @@ button { touch-action: manipulation; }
 <script>
 const meId = {{me['id']}};
 let activeUser = null;
+let activeGroup = null;
 const $ = id => document.getElementById(id);
 function closeModal() { $('modalOverlay').classList.add('hidden'); }
 function closeChatMobile(e) { e?.stopPropagation(); $('chatMainPanel').classList.remove('mobile-active'); }
@@ -467,6 +614,7 @@ async function api(url, opts={}) {
 }
 
 async function loadDialogs() {
+  activeGroup = null;
   let d = await api('/api/dialogs');
   $('chatList').innerHTML = d.dialogs.map(u => `
     <div class="chat-row ${activeUser?.id===u.id?'active':''}" onclick="openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')">
@@ -480,6 +628,21 @@ async function loadDialogs() {
       </div>
     </div>
   `).join('');
+}
+
+async function loadGroups() {
+  try {
+    const d = await api('/api/groups');
+    $('chatList').innerHTML = d.groups.map(g => `<div class="chat-row" onclick="openGroupChat(${g.id},'${esc(g.title)}')"><div class="avatar">👥</div><div><div style="font-weight:600">${esc(g.title)}</div><div style="font-size:12px;color:var(--text-muted)">گفتگوی گروهی · #${g.id}</div></div></div>`).join('') || '<div style="padding:20px;color:var(--text-muted)">هنوز گروهی نداری؛ روی 👥 بزن.</div>';
+  } catch(e) { alert(e.message); }
+}
+async function openGroupChat(id, title) {
+  activeGroup = {id, title}; activeUser = null;
+  $('chatTitle').textContent = title; $('chatStatus').textContent = 'گروه · پیام‌رسان پرو';
+  $('activeAvatar').style.backgroundImage=''; $('activeAvatar').textContent='👥';
+  const d = await api('/api/groups/'+id+'/messages');
+  $('chatMessages').innerHTML=''; seenMessageIds.clear(); d.messages.forEach(m => appendMessage(m, true)); scrollBottom();
+  if(window.innerWidth<=768) $('chatMainPanel').classList.add('mobile-active');
 }
 
 async function searchUsers() {
@@ -498,12 +661,14 @@ async function searchUsers() {
 }
 
 async function openUserChat(id, name, username, avatar) {
+  activeGroup = null;
   activeUser = {id, name, username, avatar};
   $('chatTitle').textContent = name;
   $('chatStatus').textContent = '@' + username;
   if(avatar) $('activeAvatar').style.backgroundImage = `url('${avatar}')`;
   else { $('activeAvatar').style.backgroundImage = '';$('activeAvatar').textContent = name[0]; }
   
+  const settings = await api('/api/settings'); applyChatBackground(settings.chat_background||'');
   let d = await api('/api/messages/' + id);
   $('chatMessages').innerHTML = '';
   seenMessageIds.clear();
@@ -516,21 +681,23 @@ async function openUserChat(id, name, username, avatar) {
 async function sendMessage(e) {
   e?.preventDefault();
   let body = $('messageInput').value.trim();
-  if(!body || !activeUser) return;
-  let d = await api('/api/messages', {method:'POST', body:JSON.stringify({receiver_id: activeUser.id, body})});
-  appendMessage(d.message);
+  if(!body || (!activeUser && !activeGroup)) return;
+  let d;
+  if(activeGroup) d = await api('/api/groups/'+activeGroup.id+'/messages', {method:'POST', body:JSON.stringify({body})});
+  else d = await api('/api/messages', {method:'POST', body:JSON.stringify({receiver_id: activeUser.id, body})});
+  appendMessage(d.message, !!activeGroup);
   $('messageInput').value = '';
   scrollBottom();
-  loadDialogs();
+  if(!activeGroup) loadDialogs();
 }
 
 async function handleFileUpload(input) {
-  let f = input.files[0]; if(!f || !activeUser) return;
+  let f = input.files[0]; if(!f || (!activeUser && !activeGroup)) return;
   let fd = new FormData(); fd.append('file', f);
   let r = await fetch('/api/upload', {method:'POST', body:fd});
   let d = await r.json();
   if(r.ok) {
-    let m = await api('/api/messages', {method:'POST', body:JSON.stringify({receiver_id: activeUser.id, body: location.origin + d.url, msg_type: 'image'})});
+    let m = await api('/api/messages', {method:'POST', body:JSON.stringify({receiver_id: activeUser.id, body: location.origin + d.url, msg_type: (f.name.match(/\.(mp3|wav|ogg|m4a|webm)$/i) ? 'voice' : (f.type.startsWith('image/') ? 'image' : 'file'))})});
     appendMessage(m.message);
     scrollBottom();
     loadDialogs();
@@ -539,8 +706,9 @@ async function handleFileUpload(input) {
 
 async function openProfileModal() {
   let me = await api('/api/me');
+  let settings = await api('/api/settings');
   $('modalContent').innerHTML = `
-    <h3 style="margin-bottom:16px;">تنظیمات پروفایل</h3>
+    <h3 style="margin-bottom:16px;">تنظیمات پروفایل</h3><button type="button" onclick="openAppSettings()" style="margin-bottom:12px;padding:10px;background:#334155;border:0;color:white;border-radius:10px">⚙️ تنظیمات برنامه</button>
     <form onsubmit="updateProfile(event)" style="display:flex; flex-direction:column; gap:12px;">
       <input id="pName" value="${esc(me.display_name)}" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;" required>
       <textarea id="pBio" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; height:70px; resize:none;">${esc(me.bio||'')}</textarea>
@@ -548,6 +716,9 @@ async function openProfileModal() {
       <label for="pAvatarFile" style="font-size:13px;color:var(--text-muted);">یا انتخاب عکس از دستگاه</label>
       <input id="pAvatarFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp" style="width:100%;padding:8px;background:#0e1621;color:white;border-radius:10px;">
       <img id="pAvatarPreview" alt="پیش‌نمایش عکس پروفایل" class="${me.avatar ? '' : 'hidden'}" src="${esc(me.avatar||'')}" style="width:76px;height:76px;object-fit:cover;border-radius:50%;align-self:center;">
+      <label style="font-size:13px">پس‌زمینه گفتگو (رنگ یا آدرس تصویر)</label>
+      <input id="pBackground" value="${esc(settings.chat_background||'')}" placeholder="#0e1621 یا لینک تصویر" style="padding:10px;background:#0e1621;border:1px solid #334155;color:white;border-radius:10px;">
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input id="pLastSeen" type="checkbox" ${settings.show_last_seen ? 'checked' : ''} style="width:auto;margin:0"> نمایش آخرین بازدید من</label>
       <button type="submit" style="padding:12px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer;">ذخیره</button>
     </form>
   `;
@@ -559,6 +730,20 @@ async function openProfileModal() {
     preview.src = URL.createObjectURL(file);
     preview.classList.remove('hidden');
   });
+}
+
+async function openAppSettings() {
+  const d = await api('/api/settings');
+  $('modalContent').innerHTML = `<h3 style="margin-bottom:14px">تنظیمات برنامه</h3>
+    <label style="display:block;margin:10px 0">پس‌زمینه چت (رنگ مثل #101820 یا لینک تصویر)</label>
+    <input id="settingBg" value="${esc(d.chat_background||'')}" placeholder="#101820 یا https://..." style="width:100%;padding:10px;background:#0e1621;color:white;border:1px solid #334155;border-radius:8px">
+    <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> اجازه نمایش آخرین بازدید من</label>
+    <button onclick="saveAppSettings()" style="padding:11px;background:var(--accent);border:0;color:white;border-radius:10px">ذخیره تنظیمات</button>
+    <button onclick="closeModal()" style="padding:11px;background:#334155;border:0;color:white;border-radius:10px;margin-right:6px">بستن</button>`;
+}
+async function saveAppSettings() {
+  try { const bg=$('settingBg').value.trim(); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked})}); applyChatBackground(bg); alert('تنظیمات ذخیره شد'); closeModal(); }
+  catch(e){ alert(e.message); }
 }
 
 async function updateProfile(e) {
@@ -574,6 +759,8 @@ async function updateProfile(e) {
     avatar = location.origin + uploadData.url;
   }
   await api('/api/profile', {method:'POST', body:JSON.stringify({display_name: $('pName').value.trim(), bio: $('pBio').value.trim(), avatar, phone:'', birthday:''})});
+  await api('/api/settings', {method:'POST', body:JSON.stringify({chat_background:$('pBackground').value.trim(), show_last_seen:$('pLastSeen').checked})});
+  applyChatBackground($('pBackground').value.trim());
   closeModal();
   loadDialogs();
 }
@@ -594,12 +781,88 @@ async function openHeaderProfile() {
   $('modalOverlay').classList.remove('hidden');
 }
 
+
+function formatLastSeen(value) {
+  if (!value) return 'نامشخص';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 'نامشخص';
+  return d.toLocaleString('fa-IR');
+}
+async function editMessage(id, oldBody) {
+  const body = prompt('متن جدید پیام:', oldBody);
+  if (body === null || !body.trim()) return;
+  try { await api(`/api/messages/${id}/edit`, {method:'POST', body:JSON.stringify({body:body.trim()})}); await refreshActiveChat(); }
+  catch(e) { alert(e.message); }
+}
+async function deleteMessage(id) {
+  if (!confirm('این پیام حذف شود؟')) return;
+  try { await api(`/api/messages/${id}/delete`, {method:'POST'}); await refreshActiveChat(); }
+  catch(e) { alert(e.message); }
+}
+async function refreshActiveChat() {
+  if (!activeUser) return;
+  const d = await api('/api/messages/' + activeUser.id);
+  $('chatMessages').innerHTML = ''; seenMessageIds.clear(); d.messages.forEach(appendMessage); scrollBottom();
+}
+async function blockUser(id) {
+  if (!confirm('این کاربر بلاک شود؟')) return;
+  await api('/api/block/' + id, {method:'POST'}); closeModal();
+  $('chatMessages').innerHTML = '<div style="margin:auto;color:var(--text-muted)">این کاربر بلاک شد.</div>';
+  activeUser = null; loadDialogs();
+}
+async function deleteChat(id) {
+  if (!confirm('گفتگو فقط از فهرست شما حذف شود؟ پیام‌های طرف مقابل پاک نمی‌شوند.')) return;
+  await api('/api/chats/' + id, {method:'DELETE'}); closeModal(); activeUser=null;
+  $('chatMessages').innerHTML='<div style="margin:auto;color:var(--text-muted)">گفتگو حذف شد.</div>'; loadDialogs();
+}
+function applyChatBackground(value) {
+  const box = $('chatMessages');
+  if (!box) return;
+  if (/^#[0-9a-f]{3,8}$/i.test(value)) { box.style.backgroundImage='none'; box.style.backgroundColor=value; }
+  else if (/^https?:\/\//i.test(value)) { box.style.backgroundColor=''; box.style.backgroundImage=`linear-gradient(#0e162199,#0e162199),url("${value.replace(/["\\]/g,'')}")`; box.style.backgroundSize='cover'; box.style.backgroundPosition='center'; }
+  else { box.style.backgroundImage='none'; box.style.backgroundColor=''; }
+}
+let recorder = null, recordingChunks = [];
+async function toggleVoiceRecording() {
+  const btn = $('voiceBtn');
+  if (recorder && recorder.state === 'recording') { recorder.stop(); btn.textContent='🎙️'; btn.style.color=''; return; }
+  if (!activeUser && !activeGroup) { alert('اول یک گفتگو انتخاب کن.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { alert('ضبط صدا در این مرورگر پشتیبانی نمی‌شود. در HTTPS یا localhost امتحان کن.'); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    recorder = new MediaRecorder(stream); recordingChunks=[];
+    recorder.ondataavailable = e => { if (e.data.size) recordingChunks.push(e.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t=>t.stop());
+      const blob = new Blob(recordingChunks, {type:recorder.mimeType || 'audio/webm'});
+      if (!blob.size) return;
+      const fd = new FormData(); fd.append('file', blob, 'voice.webm');
+      const up = await fetch('/api/upload',{method:'POST',body:fd}); const ud = await up.json();
+      if (!up.ok) { alert(ud.error || 'ارسال صدا ناموفق بود'); return; }
+      const payload={body:location.origin+ud.url,msg_type:'voice'};
+      const sent = activeGroup ? await api('/api/groups/'+activeGroup.id+'/messages',{method:'POST',body:JSON.stringify(payload)}) : await api('/api/messages',{method:'POST',body:JSON.stringify({...payload,receiver_id:activeUser.id})});
+      appendMessage(sent.message, !!activeGroup); scrollBottom(); if(!activeGroup) loadDialogs();
+    };
+    recorder.start(); btn.textContent='⏹️'; btn.style.color='#f87171';
+  } catch(e) { alert('اجازه دسترسی به میکروفون داده نشد یا ضبط صدا ممکن نیست.'); }
+}
+async function createGroup() {
+  const title = prompt('نام گروه را وارد کن:');
+  if (!title?.trim()) return;
+  const membersText = prompt('آیدی اعضا را با کاما جدا کن (مثلاً 2,3). خودت هم عضو می‌شوی:');
+  const memberIds = (membersText||'').split(',').map(x=>parseInt(x.trim(),10)).filter(Number.isInteger);
+  try {
+    const d = await api('/api/groups',{method:'POST',body:JSON.stringify({title:title.trim(),members:memberIds})});
+    alert(`گروه «${d.title}» ساخته شد. شناسه گروه: ${d.id}\nگفتگوی گروهی در این نسخه به‌صورت پایه ساخته می‌شود.`);
+  } catch(e) { alert(e.message); }
+}
+
 function switchFolder(f) { loadDialogs(); }
 function scrollBottom() { $('chatMessages').scrollTop =$('chatMessages').scrollHeight; }
 function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const seenMessageIds = new Set();
-function appendMessage(m) {
+function appendMessage(m, isGroup=false) {
   if (m.id != null && seenMessageIds.has(m.id)) return;
   if (m.id != null) seenMessageIds.add(m.id);
   let isMine = m.sender_id === meId;
@@ -609,7 +872,11 @@ function appendMessage(m) {
   let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
   let bodyHtml = esc(m.body);
   if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; max-height:360px; border-radius:10px; object-fit:contain;">`;
-  el.innerHTML = `<div>${bodyHtml}</div><div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
+  else if(m.msg_type === 'voice') bodyHtml = `<div style="min-width:220px"><div>🎙️ پیام صوتی</div><audio controls preload="metadata" src="${esc(m.body)}" style="width:100%;max-width:280px"></audio></div>`;
+  else if(m.msg_type === 'file') bodyHtml = `<a href="${esc(m.body)}" target="_blank" rel="noopener" style="color:#7dd3fc">📎 دریافت فایل</a>`;
+  let actions = (!isGroup && isMine) ? `<div style="display:flex;gap:8px;margin-top:6px"><button onclick="editMessage(${m.id},${JSON.stringify(m.body||'')})" style="background:none;border:0;color:#bae6fd;cursor:pointer">ویرایش</button><button onclick="deleteMessage(${m.id})" style="background:none;border:0;color:#fca5a5;cursor:pointer">حذف</button></div>` : '';
+  let sender = isGroup ? `<div style="font-size:11px;color:#7dd3fc;margin-bottom:4px">${esc(m.sender_name||m.sender_username||'کاربر')}</div>` : '';
+  el.innerHTML = `${sender}<div>${bodyHtml}</div>${actions}<div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
   $('chatMessages').appendChild(el);
 }
 
@@ -621,6 +888,11 @@ if ('Notification' in window && Notification.permission === 'default') {
   }, {once:true});
 }
 const socket = io();
+socket.on('group_message', m => { if(activeGroup && activeGroup.id===m.group_id){ appendMessage(m,true); scrollBottom(); } });
+socket.on('update_message', m => {
+  if (activeUser && (m.sender_id === activeUser.id || m.receiver_id === activeUser.id)) refreshActiveChat();
+});
+socket.on('delete_message', () => { if (activeUser) refreshActiveChat(); });
 socket.on('new_message', m => {
   const belongsToOpenChat = activeUser &&
     ((m.sender_id === meId && m.receiver_id === activeUser.id) ||
@@ -644,6 +916,7 @@ socket.on('new_message', m => {
 });
 
 loadDialogs();
+api('/api/settings').then(x => applyChatBackground(x.chat_background || '')).catch(()=>{});
 </script>
 </body>
 </html>
