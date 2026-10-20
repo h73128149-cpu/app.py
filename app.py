@@ -55,6 +55,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS user_settings(
           user_id INTEGER PRIMARY KEY REFERENCES users(id), chat_background TEXT DEFAULT '',
           show_last_seen INTEGER DEFAULT 1, theme TEXT DEFAULT 'dark');
+        CREATE TABLE IF NOT EXISTS device_accounts(
+          device_token TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id),
+          created_at TEXT NOT NULL, PRIMARY KEY(device_token,user_id));
         CREATE TABLE IF NOT EXISTS chat_groups(
           id INTEGER PRIMARY KEY, title TEXT NOT NULL, owner_id INTEGER NOT NULL REFERENCES users(id),
           created_at TEXT NOT NULL);
@@ -108,21 +111,30 @@ def index():
 @app.route("/register", methods=["GET","POST"])
 def register():
     error = ""
+    device_token = request.cookies.get("pr_device") or secrets.token_urlsafe(24)
     if request.method == "POST":
-        username = request.form.get("username","").strip().lstrip("@")
+        username = request.form.get("username"," ").strip().lstrip("@")
         display = request.form.get("display_name","").strip()[:50]
         password = request.form.get("password","")
-        if not valid_username(username): error = "نام کاربری باید ۳ تا ۲۴ حرف انگلیسی، عدد یا _ باشد."
+        count = db().execute("SELECT COUNT(*) FROM device_accounts WHERE device_token=?", (device_token,)).fetchone()[0]
+        if count >= 2:
+            error = "روی این مرورگر حداکثر دو حساب می‌توانی بسازی. برای امنیت، کوکی مرورگر را پاک نکن تا محدودیت دور زده نشود."
+        elif not valid_username(username): error = "نام کاربری باید ۳ تا ۲۴ حرف انگلیسی، عدد یا _ باشد."
         elif len(password) < 8: error = "رمز عبور باید حداقل ۸ کاراکتر باشد."
         elif not display: error = "نام نمایشی را وارد کنید."
         else:
             try:
                 cur = db().execute("INSERT INTO users(username,display_name,password_hash,created_at,last_seen) VALUES(?,?,?,?,?)",
                                    (username.lower(),display,hash_password(password),now(),now()))
+                db().execute("INSERT INTO device_accounts(device_token,user_id,created_at) VALUES(?,?,?)", (device_token,cur.lastrowid,now()))
                 db().commit(); session.clear(); session["uid"] = cur.lastrowid
-                return redirect(url_for("index"))
+                response = redirect(url_for("index"))
+                response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, samesite="Lax")
+                return response
             except sqlite3.IntegrityError: error = "این نام کاربری قبلاً گرفته شده است."
-    return render_template_string(AUTH, title="ساخت حساب کاربری", error=error, action="register")
+    response = render_template_string(AUTH, title="ساخت حساب کاربری", error=error, action="register")
+    response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, samesite="Lax")
+    return response
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -322,8 +334,10 @@ def save_settings():
     if bg and not (re.fullmatch(r"#[0-9a-fA-F]{3,8}",bg) or bg.startswith("https://") or bg.startswith("http://")):
         return jsonify(error="پس‌زمینه باید رنگ HEX یا لینک تصویر باشد"),400
     db().execute("INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)",(u["id"],))
-    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=? WHERE user_id=?",
-                 (bg,1 if data.get("show_last_seen") else 0,u["id"]))
+    theme=str(data.get("theme","dark"))[:24]
+    if theme not in {"dark","telegram","neon","crimson","matrix","amoled"}: theme="dark"
+    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=?,theme=? WHERE user_id=?",
+                 (bg,1 if data.get("show_last_seen") else 0,theme,u["id"]))
     db().commit()
     return jsonify(ok=True)
 
@@ -509,7 +523,12 @@ button { touch-action: manipulation; }
 
 .chat-list { flex: 1; overflow-y: auto; }
 .chat-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
-.chat-row:hover { background: var(--panel-hover); }
+.chat-row:hover { background: var(--panel-hover); transform:translateX(-2px); }
+.chat-row { transition:background .16s,transform .16s; border-bottom:1px solid #ffffff05; }
+.message-bubble { animation: bubbleIn .16s ease-out; }
+@keyframes bubbleIn {from{opacity:.4;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.chat-topbar-info:hover {opacity:.9}
+select, input, textarea { accent-color:var(--accent); }
 .chat-row.active { background: var(--active-bg); }
 .avatar { width: 48px; height: 48px; border-radius: 50%; background: #2b5278; display: grid; place-items: center; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; font-size: 16px; color: white; }
 
@@ -548,6 +567,39 @@ button { touch-action: manipulation; }
   .action-btn { font-size: 20px; padding: 5px; }
   .modal-card { padding: 18px; max-height: 86dvh; }
 }
+/* PayamRasan signature theme: Telegram-like desktop layout with a richer neon finish */
+:root {
+  --bg-main:#0b111b; --panel-bg:#111c2b; --panel-hover:#1b2a3d;
+  --active-bg:#24496d; --accent:#43c6ff; --bubble-out:#245a83;
+  --bubble-in:#172536; --text-muted:#91a8c0; --border-color:#26364a;
+}
+body { background: radial-gradient(ellipse at 75% 0%, #13243a 0%, #0b111b 48%, #080d15 100%); }
+.tg-app { max-width:none; }
+.folder-rail { background:#080e17; border-left:1px solid #26364a; box-shadow:8px 0 30px #0002; }
+.folder-icon { transition:transform .18s, background .18s, color .18s; }
+.folder-icon:hover { transform:translateY(-2px); background:#1a2c40; color:#fff; }
+.sidebar { width:clamp(300px, 31vw, 410px); background:rgba(15,26,40,.97); border-left:1px solid #26364a; }
+.sidebar-header { min-height:72px; padding:15px 16px; background:linear-gradient(135deg,#14253a,#101a29); }
+.search-container { border:1px solid #2b4057; background:#0b1421; border-radius:13px; height:42px; transition:border .2s, box-shadow .2s; }
+.search-container:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px #43c6ff18; }
+.chat-row { padding:13px 16px; border-bottom:1px solid #ffffff06; transition:background .15s; }
+.chat-row.active { background:linear-gradient(90deg,#214e75,#1a3854); box-shadow:inset -3px 0 var(--accent); }
+.avatar { box-shadow:0 3px 12px #0003; border:1px solid #ffffff12; }
+.chat-main { background:radial-gradient(ellipse at 50% 0%,#132238 0%,#0b1420 62%); }
+.chat-topbar { background:rgba(16,28,43,.97); border-bottom:1px solid #2a3b50; box-shadow:0 4px 18px #0002; }
+.chat-messages { background-image:radial-gradient(#6ba6d008 1px,transparent 1px); background-size:18px 18px; }
+.message-bubble { border:1px solid #ffffff0a; box-shadow:0 4px 14px #00012; border-radius:16px 16px 5px 16px; }
+.message-bubble:not(.mine) { border-radius:16px 16px 16px 5px; }
+.message-bubble.mine { background:linear-gradient(135deg,#245b84,#1e496d); }
+.chat-composer { background:rgba(16,28,43,.98); border-top:1px solid #2a3b50; }
+.composer-input { border:1px solid #263b52; background:#0b1421; border-radius:15px; }
+.composer-input:focus { border-color:#43c6ff88; }
+.action-btn { transition:transform .15s,color .15s,background .15s; }
+.action-btn:hover { color:#fff; background:#263b52; transform:scale(1.06); }
+.modal-card { background:linear-gradient(145deg,#17263a,#101a29); border:1px solid #344a64; box-shadow:0 24px 90px #0009; }
+.chat-list::-webkit-scrollbar,.chat-messages::-webkit-scrollbar { width:6px; }
+.chat-list::-webkit-scrollbar-thumb,.chat-messages::-webkit-scrollbar-thumb { background:#344b63; border-radius:8px; }
+@media (min-width:769px) { .chat-topbar { height:72px; } .message-bubble { max-width:min(68%,760px); } }
 </style>
 </head>
 <body>
@@ -560,6 +612,13 @@ button { touch-action: manipulation; }
   </div>
 
   <aside class="sidebar" id="sidebarPanel">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 17px 4px;background:linear-gradient(135deg,#14253a,#101a29);">
+      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+        <div style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#43c6ff,#635bff);box-shadow:0 5px 18px #43c6ff30;font-size:20px;">✦</div>
+        <div><div style="font-weight:800;letter-spacing:.2px;font-size:15px;">PayamRasan <span style="color:#43c6ff">Pro</span></div><div style="font-size:10px;color:#91a8c0;">PRIVATE MESSENGER</div></div>
+      </div>
+      <button type="button" title="حساب فعلی و مدیریت حساب‌ها" onclick="accountInfo()" style="border:1px solid #30465f;background:#0b1421;color:#a9c9e8;border-radius:11px;padding:8px 10px;cursor:pointer;">👤 حساب</button>
+    </div>
     <div class="sidebar-header">
       <div class="search-container">
         <input id="searchInput" placeholder="جستجو آیدی..." oninput="searchUsers()">
@@ -604,6 +663,10 @@ let activeUser = null;
 let activeGroup = null;
 const $ = id => document.getElementById(id);
 function closeModal() { $('modalOverlay').classList.add('hidden'); }
+function accountInfo() {
+  $('modalContent').innerHTML = `<h3 style="margin-bottom:12px">مدیریت حساب</h3><p style="color:var(--text-muted);line-height:1.9;font-size:13px">این مرورگر برای ساخت حداکثر دو حساب محدود شده است. برای ورود به حساب دیگر از خروج استفاده کن و با حساب دوم وارد شو. محدودیت به شناسهٔ ذخیره‌شده در کوکی مرورگر وابسته است و محدودیت هویتیِ ضدتقلب محسوب نمی‌شود.</p><button onclick="location.href='/logout'" style="margin-top:16px;padding:11px;border:0;border-radius:10px;background:var(--accent);color:#06121e;font-weight:bold;width:100%;cursor:pointer">خروج از حساب</button><button onclick="closeModal()" style="margin-top:8px;padding:10px;border:1px solid #30465f;border-radius:10px;background:transparent;color:white;width:100%;cursor:pointer">بستن</button>`;
+  $('modalOverlay').classList.remove('hidden');
+}
 function closeChatMobile(e) { e?.stopPropagation(); $('chatMainPanel').classList.remove('mobile-active'); }
 
 async function api(url, opts={}) {
@@ -738,11 +801,12 @@ async function openAppSettings() {
     <label style="display:block;margin:10px 0">پس‌زمینه چت (رنگ مثل #101820 یا لینک تصویر)</label>
     <input id="settingBg" value="${esc(d.chat_background||'')}" placeholder="#101820 یا https://..." style="width:100%;padding:10px;background:#0e1621;color:white;border:1px solid #334155;border-radius:8px">
     <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> اجازه نمایش آخرین بازدید من</label>
+    <label style="display:block;margin:12px 0 6px">انتخاب تم</label><select id="settingTheme" style="width:100%;padding:11px;background:#0e1621;color:white;border:1px solid #334155;border-radius:9px"><option value="dark" ${d.theme==='dark'?'selected':''}>Dark Pro</option><option value="telegram" ${d.theme==='telegram'?'selected':''}>Telegram Blue</option><option value="neon" ${d.theme==='neon'?'selected':''}>Neon Cyber</option><option value="crimson" ${d.theme==='crimson'?'selected':''}>Crimson</option><option value="matrix" ${d.theme==='matrix'?'selected':''}>Matrix</option><option value="amoled" ${d.theme==='amoled'?'selected':''}>AMOLED</option></select>
     <button onclick="saveAppSettings()" style="padding:11px;background:var(--accent);border:0;color:white;border-radius:10px">ذخیره تنظیمات</button>
     <button onclick="closeModal()" style="padding:11px;background:#334155;border:0;color:white;border-radius:10px;margin-right:6px">بستن</button>`;
 }
 async function saveAppSettings() {
-  try { const bg=$('settingBg').value.trim(); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked})}); applyChatBackground(bg); alert('تنظیمات ذخیره شد'); closeModal(); }
+  try { const bg=$('settingBg').value.trim(); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value})}); applyChatBackground(bg); applyTheme($('settingTheme').value); alert('تنظیمات ذخیره شد'); closeModal(); }
   catch(e){ alert(e.message); }
 }
 
@@ -759,7 +823,7 @@ async function updateProfile(e) {
     avatar = location.origin + uploadData.url;
   }
   await api('/api/profile', {method:'POST', body:JSON.stringify({display_name: $('pName').value.trim(), bio: $('pBio').value.trim(), avatar, phone:'', birthday:''})});
-  await api('/api/settings', {method:'POST', body:JSON.stringify({chat_background:$('pBackground').value.trim(), show_last_seen:$('pLastSeen').checked})});
+  await api('/api/settings', {method:'POST', body:JSON.stringify({chat_background:$('pBackground').value.trim(), show_last_seen:$('pLastSeen').checked, theme:(await api('/api/settings')).theme||'dark'})});
   applyChatBackground($('pBackground').value.trim());
   closeModal();
   loadDialogs();
@@ -815,6 +879,20 @@ async function deleteChat(id) {
   await api('/api/chats/' + id, {method:'DELETE'}); closeModal(); activeUser=null;
   $('chatMessages').innerHTML='<div style="margin:auto;color:var(--text-muted)">گفتگو حذف شد.</div>'; loadDialogs();
 }
+function applyTheme(theme) {
+  const root=document.documentElement;
+  const themes={
+    dark:['#0b111b','#111c2b','#1b2a3d','#24496d','#43c6ff','#245a83','#172536','#91a8c0','#26364a'],
+    telegram:['#0e1621','#17212b','#202b38','#2b5278','#2AABEE','#2b5278','#182533','#8eabbf','#0f151d'],
+    neon:['#080914','#111126','#202044','#352c72','#b66cff','#4b3187','#19182d','#b9b4dc','#322d55'],
+    crimson:['#10090c','#211219','#38202a','#612637','#ff4568','#70253a','#29151e','#c9a4ae','#40202b'],
+    matrix:['#030906','#09150e','#10271a','#17472c','#49ff8b','#1a6338','#0d2015','#8ebba0','#163522'],
+    amoled:['#000000','#050505','#151515','#222222','#39bfff','#202020','#101010','#999999','#242424']
+  };
+  const t=themes[theme]||themes.dark;
+  ['--bg-main','--panel-bg','--panel-hover','--active-bg','--accent','--bubble-out','--bubble-in','--text-muted','--border-color'].forEach((k,i)=>root.style.setProperty(k,t[i]));
+  localStorage.setItem('pr-theme',theme||'dark');
+}
 function applyChatBackground(value) {
   const box = $('chatMessages');
   if (!box) return;
@@ -853,7 +931,7 @@ async function createGroup() {
   const memberIds = (membersText||'').split(',').map(x=>parseInt(x.trim(),10)).filter(Number.isInteger);
   try {
     const d = await api('/api/groups',{method:'POST',body:JSON.stringify({title:title.trim(),members:memberIds})});
-    alert(`گروه «${d.title}» ساخته شد. شناسه گروه: ${d.id}\nگفتگوی گروهی در این نسخه به‌صورت پایه ساخته می‌شود.`);
+    await loadGroups(); await openGroupChat(d.id,d.title);
   } catch(e) { alert(e.message); }
 }
 
@@ -862,12 +940,23 @@ function scrollBottom() { $('chatMessages').scrollTop =$('chatMessages').scrollH
 function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const seenMessageIds = new Set();
+function messageMenu(m,isGroup=false) {
+  const choices=[];
+  choices.push(['📋 کپی متن',()=>navigator.clipboard?.writeText(m.body||'')]);
+  choices.push(['↩️ پاسخ',()=>{ $('messageInput').value='↩ '+(m.sender_name||m.sender_username||'')+': '+(m.body||'').slice(0,100)+'\n'; $('messageInput').focus(); }]);
+  if(!isGroup && m.sender_id===meId){ choices.push(['✏️ ویرایش',()=>editMessage(m.id,m.body||'')]); choices.push(['🗑️ حذف',()=>deleteMessage(m.id)]); }
+  const html=`<h3 style="margin-bottom:12px">گزینه‌های پیام</h3>${choices.map((c,i)=>`<button onclick="runMessageChoice(${i})" style="display:block;width:100%;padding:11px;margin:6px 0;background:#172536;color:white;border:1px solid #344a64;border-radius:9px;text-align:right">${c[0]}</button>`).join('')}<button onclick="closeModal()" style="width:100%;padding:10px;background:transparent;color:#9fb2c7;border:0">بستن</button>`;
+  window._messageChoices=choices; $('modalContent').innerHTML=html; $('modalOverlay').classList.remove('hidden');
+}
+function runMessageChoice(i){const c=window._messageChoices?.[i];if(c){closeModal();Promise.resolve(c[1]()).catch(()=>{});}}
 function appendMessage(m, isGroup=false) {
   if (m.id != null && seenMessageIds.has(m.id)) return;
   if (m.id != null) seenMessageIds.add(m.id);
   let isMine = m.sender_id === meId;
   let el = document.createElement('div');
   el.dataset.messageId = m.id ?? '';
+  el.title = 'برای گزینه‌های بیشتر راست‌کلیک کنید';
+  el.addEventListener('contextmenu', ev => { ev.preventDefault(); messageMenu(m, isGroup); });
   el.className = `message-bubble ${isMine?'mine':''}`;
   let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
   let bodyHtml = esc(m.body);
@@ -916,7 +1005,7 @@ socket.on('new_message', m => {
 });
 
 loadDialogs();
-api('/api/settings').then(x => applyChatBackground(x.chat_background || '')).catch(()=>{});
+api('/api/settings').then(x => {applyChatBackground(x.chat_background || ''); applyTheme(x.theme||'dark');}).catch(()=>{applyTheme(localStorage.getItem('pr-theme')||'dark');});
 </script>
 </body>
 </html>
