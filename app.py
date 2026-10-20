@@ -1,5 +1,5 @@
 """
-PayamRasan Pro — Modern Telegram Web UI Clone
+PayamRasan Pro — Fixed & Complete Telegram Clone
 """
 import os, re, sqlite3, secrets, hashlib, hmac
 from functools import wraps
@@ -46,10 +46,6 @@ def init_db():
           msg_type TEXT DEFAULT 'text', attachment TEXT DEFAULT '', reply_to INTEGER DEFAULT 0,
           reaction TEXT DEFAULT '', pinned INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
           created_at TEXT NOT NULL, read_at TEXT);
-        CREATE TABLE IF NOT EXISTS groups_chat(id INTEGER PRIMARY KEY, title TEXT NOT NULL, avatar TEXT DEFAULT '',
-          owner_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS group_members(group_id INTEGER, user_id INTEGER, role TEXT DEFAULT 'member',
-          PRIMARY KEY(group_id,user_id));
         """)
 
 def now():
@@ -160,7 +156,15 @@ def get_dialogs():
         )
         ORDER BY m.id DESC
     """, (me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
-    return jsonify(dialogs=[dict(r) for r in rows])
+    
+    dialogs = [dict(r) for r in rows]
+    # Ensure Saved Messages is always present
+    if not any(d['id'] == me['id'] for d in dialogs):
+        dialogs.insert(0, {
+            "id": me['id'], "username": me['username'], "display_name": "پیام‌های ذخیره‌شده (Saved Messages)",
+            "avatar": me['avatar'], "online": 1, "last_seen": now(), "last_msg": "خوش آمدید", "last_time": now()
+        })
+    return jsonify(dialogs=dialogs)
 
 @app.get("/api/users")
 @login_required
@@ -179,10 +183,13 @@ def get_messages(other_id):
     me=current_user()
     db().execute("UPDATE messages SET read_at=? WHERE sender_id=? AND receiver_id=? AND read_at IS NULL",(now(),other_id,me["id"]))
     db().commit()
-    rows=db().execute("""SELECT m.*,u.username sender_username,u.display_name sender_name FROM messages m
-       JOIN users u ON u.id=m.sender_id WHERE
-       ((m.sender_id=? AND m.receiver_id=?) OR (m.sender_id=? AND m.receiver_id=?)) AND m.deleted=0
-       ORDER BY m.id ASC LIMIT 300""",(me["id"],other_id,other_id,me["id"])).fetchall()
+    if other_id == me["id"]:
+        rows=db().execute("SELECT m.*,u.username sender_username,u.display_name sender_name FROM messages m JOIN users u ON u.id=m.sender_id WHERE m.sender_id=? AND m.receiver_id=? AND m.deleted=0 ORDER BY m.id ASC LIMIT 300",(me["id"],me["id"])).fetchall()
+    else:
+        rows=db().execute("""SELECT m.*,u.username sender_username,u.display_name sender_name FROM messages m
+           JOIN users u ON u.id=m.sender_id WHERE
+           ((m.sender_id=? AND m.receiver_id=?) OR (m.sender_id=? AND m.receiver_id=?)) AND m.deleted=0
+           ORDER BY m.id ASC LIMIT 300""",(me["id"],other_id,other_id,me["id"])).fetchall()
     return jsonify(messages=[dict(r) for r in rows])
 
 @app.post("/api/messages")
@@ -200,7 +207,8 @@ def send_message():
     msg=dict(id=cur.lastrowid,sender_id=me["id"],receiver_id=rid,body=body,msg_type=msg_type,
              reaction='',created_at=now(),sender_username=me["username"],sender_name=me["display_name"],read_at=None)
     socketio.emit("new_message",msg,room=f"user:{rid}")
-    socketio.emit("new_message",msg,room=f"user:{me['id']}")
+    if rid != me["id"]:
+        socketio.emit("new_message",msg,room=f"user:{me['id']}")
     return jsonify(message=msg)
 
 @app.post("/api/messages/<int:mid>/edit")
@@ -285,30 +293,27 @@ AUTH = r"""
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Vazirmatn', sans-serif; }
 body { background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #f8fafc; padding: 16px; }
-.auth-card { width: min(400px, 100%); background: #1e293b; padding: 32px 24px; border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
-input { width: 100%; padding: 12px 16px; margin-bottom: 14px; background: #0b132b; border: 1px solid #334155; border-radius: 12px; color: white; outline: none; transition: 0.2s; }
-input:focus { border-color: #2AABEE; box-shadow: 0 0 0 3px rgba(42,171,238,0.2); }
-button { width: 100%; padding: 12px; background: #2AABEE; border: none; border-radius: 12px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
-button:hover { background: #229ed9; }
-.error { background: rgba(239,68,68,0.15); color: #fca5a5; padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; border: 1px solid rgba(239,68,68,0.3); }
-a { color: #2AABEE; text-decoration: none; font-size: 13px; font-weight: 500; }
-a:hover { text-decoration: underline; }
+.auth-card { width: min(400px, 100%); background: #1e293b; padding: 32px 24px; border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.08); }
+input { width: 100%; padding: 12px 16px; margin-bottom: 14px; background: #0b132b; border: 1px solid #334155; border-radius: 12px; color: white; outline: none; }
+button { width: 100%; padding: 12px; background: #2AABEE; border: none; border-radius: 12px; color: white; font-weight: bold; cursor: pointer; }
+.error { background: rgba(239,68,68,0.15); color: #fca5a5; padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+a { color: #2AABEE; text-decoration: none; font-size: 13px; }
 </style>
 </head>
 <body>
 <div class="auth-card">
-  <h2 style="margin-bottom: 20px; font-weight: 700; color: #f1f5f9;">{{title}}</h2>
+  <h2 style="margin-bottom: 20px; font-weight: 700;">{{title}}</h2>
   {% if error %}<div class="error">{{error}}</div>{% endif %}
   <form method="post">
     {% if action=='register' %}
-    <input name="display_name" placeholder="نام و نام خانوادگی" required>
+    <input name="display_name" placeholder="نام نمایشی" required>
     {% endif %}
-    <input name="username" placeholder="نام کاربری (آیدی بدون @)" required>
+    <input name="username" placeholder="نام کاربری (آیدی)" required>
     <input name="password" type="password" placeholder="رمز عبور" required>
     <button type="submit">{{title}}</button>
   </form>
   <div style="margin-top: 18px;">
-    {% if action=='login' %}<a href="{{url_for('register')}}">حساب کاربری ندارید؟ ثبت‌نام</a>{% else %}<a href="{{url_for('login')}}">قبلاً ثبت‌نام کرده‌اید؟ ورود</a>{% endif %}
+    {% if action=='login' %}<a href="{{url_for('register')}}">ساخت حساب جدید</a>{% else %}<a href="{{url_for('login')}}">ورود به حساب</a>{% endif %}
   </div>
 </div>
 </body>
@@ -340,75 +345,45 @@ PAGE = r"""
 body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-fill-available; overflow: hidden; display: flex; }
 
 .tg-app { display: flex; width: 100vw; height: 100%; position: relative; }
-
-/* Left Nav Rail */
 .folder-rail { width: 64px; background: #0e1621; border-left: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 14px; z-index: 15; flex-shrink: 0; }
-.folder-icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
-.folder-icon:hover { background: var(--panel-hover); color: white; }
+.folder-icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; color: var(--text-muted); cursor: pointer; }
 .folder-icon.active { background: var(--panel-bg); color: var(--accent); }
 
-/* Slide Menu Drawer */
-.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 90; display: none; backdrop-filter: blur(2px); }
-.drawer-overlay.active { display: block; }
-.hamburger-menu {
-  position: fixed; top: 0; right: -320px; width: 300px; height: 100%;
-  background: var(--panel-bg); z-index: 100; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex; flex-direction: column; border-left: 1px solid #232e3c;
-}
-.hamburger-menu.open { right: 0; }
-.menu-header { background: #202b38; padding: 24px 20px; position: relative; border-bottom: 1px solid var(--border-color); }
-.close-menu-btn { position: absolute; left: 16px; top: 16px; background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 6px; border-radius: 50%; display: grid; place-items: center; }
-.close-menu-btn:hover { background: rgba(255,255,255,0.1); }
-.menu-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-size: 22px; font-weight: bold; background-size: cover; background-position: center; margin-bottom: 12px; }
-
-.menu-items { padding: 8px 0; flex: 1; }
-.menu-item { padding: 14px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; font-size: 14px; color: #e2e8f0; text-decoration: none; transition: 0.15s; }
-.menu-item:hover { background: var(--panel-hover); }
-
-/* Sidebar Chats */
 .sidebar { width: 340px; background: var(--panel-bg); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
 .sidebar-header { padding: 12px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border-color); }
 .search-container { flex: 1; background: var(--bg-main); border-radius: 20px; display: flex; align-items: center; padding: 0 14px; height: 38px; }
 .search-container input { width: 100%; background: none; border: none; color: white; outline: none; font-size: 13px; }
 
 .chat-list { flex: 1; overflow-y: auto; }
-.chat-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; transition: 0.15s; }
+.chat-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
 .chat-row:hover { background: var(--panel-hover); }
 .chat-row.active { background: var(--active-bg); }
 .avatar { width: 48px; height: 48px; border-radius: 50%; background: #2b5278; display: grid; place-items: center; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; font-size: 16px; color: white; }
 
-/* Main Chat Area */
 .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; height: 100%; min-width: 0; }
 .chat-topbar { padding: 10px 16px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; height: 60px; flex-shrink: 0; }
 .chat-topbar-info { display: flex; align-items: center; gap: 12px; cursor: pointer; min-width: 0; }
 .back-btn-mobile { display: none; background: none; border: none; color: white; font-size: 22px; cursor: pointer; }
 
-.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: radial-gradient(circle at center, #0e1621 0%, #080c12 100%); }
-.message-bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; position: relative; word-break: break-word; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-.message-bubble.mine { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
-.message-bubble:not(.mine) { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-main); }
+.message-bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; position: relative; word-break: break-word; }
+.message-bubble.mine { align-self: flex-end; background: var(--bubble-out); }
+.message-bubble:not(.mine) { align-self: flex-start; background: var(--bubble-in); }
 .msg-time { font-size: 10px; color: rgba(255,255,255,0.6); float: left; margin-top: 4px; margin-left: 6px; display: flex; align-items: center; gap: 3px; }
 
-/* Composer / Input Area */
 .chat-composer { padding: 12px 16px; background: var(--panel-bg); border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.composer-input { flex: 1; background: var(--bg-main); border: none; border-radius: 12px; color: white; padding: 10px 14px; font-size: 14px; outline: none; resize: none; height: 44px; max-height: 120px; }
-.action-btn { background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; padding: 6px; border-radius: 50%; flex-shrink: 0; transition: 0.15s; }
-.action-btn:hover { color: white; background: rgba(255,255,255,0.05); }
+.composer-input { flex: 1; background: var(--bg-main); border: none; border-radius: 12px; color: white; padding: 10px 14px; font-size: 14px; outline: none; resize: none; height: 44px; }
+.action-btn { background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; padding: 6px; border-radius: 50%; flex-shrink: 0; }
 
-/* Modals */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: grid; place-items: center; z-index: 1000; padding: 16px; backdrop-filter: blur(4px); }
-.modal-card { width: min(420px, 100%); background: var(--panel-bg); border: 1px solid #232e3c; padding: 24px; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: grid; place-items: center; z-index: 1000; padding: 16px; }
+.modal-card { width: min(420px, 100%); background: var(--panel-bg); border: 1px solid #232e3c; padding: 24px; border-radius: 20px; max-height: 90vh; overflow-y: auto; }
 .hidden { display: none !important; }
-
-.reaction-bar { display: flex; gap: 8px; background: var(--panel-bg); padding: 8px 12px; border-radius: 24px; border: 1px solid #232e3c; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-.reaction-btn { background: none; border: none; font-size: 18px; cursor: pointer; transition: transform 0.1s; }
-.reaction-btn:hover { transform: scale(1.2); }
 
 @media (max-width: 768px) {
   .folder-rail { width: 56px; }
   .sidebar { width: calc(100vw - 56px); position: absolute; right: 56px; top: 0; height: 100%; z-index: 5; }
   .sidebar.mobile-hidden { display: none; }
-  .chat-main { width: 100vw; position: absolute; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+  .chat-main { width: 100vw; position: absolute; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s ease; }
   .chat-main.mobile-active { transform: translateX(0); }
   .back-btn-mobile { display: inline-block; }
 }
@@ -417,39 +392,20 @@ body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-
 <body>
 
 <div class="tg-app">
-  <!-- Left Nav Rail -->
   <div class="folder-rail">
-    <div class="folder-icon active" id="fAll" onclick="switchFolder('all')" title="گفتگوها">💬</div>
-    <div class="folder-icon" onclick="openProfileModal()" title="تنظیمات پروفایل">⚙️</div>
+    <div class="folder-icon active" onclick="switchFolder('all')">💬</div>
+    <div class="folder-icon" onclick="openProfileModal()">⚙️</div>
   </div>
 
-  <!-- Slide Menu Drawer -->
-  <div class="drawer-overlay" id="drawerOverlay" onclick="toggleMenu()"></div>
-  <div class="hamburger-menu" id="hamburgerMenu">
-    <div class="menu-header">
-      <button class="close-menu-btn" onclick="toggleMenu()">✕</button>
-      <div class="menu-avatar" id="mAvatar"></div>
-      <div style="font-weight: 700; font-size: 16px;" id="mName"></div>
-      <div style="font-size: 13px; color: var(--accent); margin-top: 2px;" id="mUser"></div>
-    </div>
-    <div class="menu-items">
-      <div class="menu-item" onclick="toggleMenu(); openProfileModal()"><span>👤</span> تنظیمات پروفایل</div>
-      <a href="{{url_for('logout')}}" class="menu-item" style="color: #ff6b6b;"><span>🚪</span> خروج از حساب</a>
-    </div>
-  </div>
-
-  <!-- Sidebar -->
   <aside class="sidebar" id="sidebarPanel">
     <div class="sidebar-header">
-      <button class="action-btn" onclick="toggleMenu()" title="منو">☰</button>
       <div class="search-container">
-        <input id="searchInput" placeholder="جستجو آیدی (مثلا ali)..." oninput="searchUsers()">
+        <input id="searchInput" placeholder="جستجو آیدی..." oninput="searchUsers()">
       </div>
     </div>
     <div class="chat-list" id="chatList"></div>
   </aside>
 
-  <!-- Main Chat Panel -->
   <main class="chat-main" id="chatMainPanel">
     <header class="chat-topbar">
       <div class="chat-topbar-info" onclick="openHeaderProfile()">
@@ -457,27 +413,24 @@ body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-
         <div class="avatar" id="activeAvatar" style="width:40px; height:40px;">💬</div>
         <div>
           <div style="font-size:15px; font-weight:700;" id="chatTitle">تلگرام پرو</div>
-          <div style="font-size:12px; color: var(--text-muted);" id="chatStatus">لطفاً یک گفتگو انتخاب کنید</div>
+          <div style="font-size:12px; color: var(--text-muted);" id="chatStatus">انتخاب گفتگو</div>
         </div>
       </div>
     </header>
 
     <div class="chat-messages" id="chatMessages">
-      <div style="margin: auto; text-align: center; color: var(--text-muted); font-size: 14px;">
-        یک مخاطب را از جستجو یا لیست انتخاب کنید تا چت آغاز شود 🚀
-      </div>
+      <div style="margin: auto; text-align: center; color: var(--text-muted); font-size: 14px;">یک مخاطب را انتخاب کنید</div>
     </div>
 
     <form class="chat-composer" onsubmit="sendMessage(event)">
-      <button type="button" class="action-btn" onclick="$('fileInput').click()" title="ارسال فایل/عکس">📎</button>
+      <button type="button" class="action-btn" onclick="$('fileInput').click()">📎</button>
       <input type="file" id="fileInput" hidden onchange="handleFileUpload(this)">
       <textarea id="messageInput" class="composer-input" placeholder="نوشتن پیام..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
-      <button type="submit" class="action-btn" style="color: var(--accent);" title="ارسال">➤</button>
+      <button type="submit" class="action-btn" style="color: var(--accent);">➤</button>
     </form>
   </main>
 </div>
 
-<!-- Modal Container -->
 <div id="modalOverlay" class="modal-overlay hidden" onclick="if(event.target===this) closeModal()">
   <div class="modal-card" id="modalContent"></div>
 </div>
@@ -486,27 +439,14 @@ body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-
 const meId = {{me['id']}};
 let activeUser = null;
 const $ = id => document.getElementById(id);
-
-function toggleMenu() {
-  $('hamburgerMenu').classList.toggle('open');$('drawerOverlay').classList.toggle('active');
-}
 function closeModal() { $('modalOverlay').classList.add('hidden'); }
 function closeChatMobile(e) { e?.stopPropagation(); $('chatMainPanel').classList.remove('mobile-active'); }
 
 async function api(url, opts={}) {
   let r = await fetch(url, {...opts, headers:{'Content-Type':'application/json', ...(opts.headers||{})}});
   let d = await r.json().catch(()=>({}));
-  if(!r.ok) throw Error(d.error || 'خطا در شبکه');
+  if(!r.ok) throw Error(d.error || 'خطا');
   return d;
-}
-
-async function init() {
-  let me = await api('/api/me');
-  $('mName').textContent = me.display_name;
-  $('mUser').textContent = '@' + me.username;
-  if(me.avatar) $('mAvatar').style.backgroundImage = `url('${me.avatar}')`;
-  else $('mAvatar').textContent = me.display_name[0];
-  loadDialogs();
 }
 
 async function loadDialogs() {
@@ -519,10 +459,10 @@ async function loadDialogs() {
           <span>${esc(u.display_name)}</span>
           <span style="font-size:11px; color:var(--text-muted);">${(u.last_time||'').slice(11,16)}</span>
         </div>
-        <div style="font-size:13px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">${esc(u.last_msg)}</div>
+        <div style="font-size:13px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(u.last_msg)}</div>
       </div>
     </div>
-  `).join('') || '<div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">هنوز گفتگویی ندارید.<br>از طریق جستجو آیدی مخاطب را پیدا کنید.</div>';
+  `).join('');
 }
 
 async function searchUsers() {
@@ -537,7 +477,7 @@ async function searchUsers() {
         <div style="font-size:12px; color:var(--accent);">@${esc(u.username)}</div>
       </div>
     </div>
-  `).join('') || '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:13px;">کاربری پیدا نشد.</div>';
+  `).join('');
 }
 
 async function openUserChat(id, name, username, avatar) {
@@ -559,46 +499,13 @@ function appendMessage(m) {
   let isMine = m.sender_id === meId;
   let el = document.createElement('div');
   el.className = `message-bubble ${isMine?'mine':''}`;
-  
   let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
   let bodyHtml = esc(m.body);
-  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; border-radius:10px; display:block;">`;
+  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; border-radius:10px;">`;
   
-  el.innerHTML = `
-    <div>${bodyHtml}</div>
-    <div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>
-    ${m.reaction ? `<div style="font-size:13px; margin-top:4px;">${m.reaction}</div>` : ''}
-  `;
-  el.onclick = () => showMessageMenu(m);
+  el.innerHTML = `<div>${bodyHtml}</div><div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
   $('chatMessages').appendChild(el);
 }
-
-function showMessageMenu(m) {
-  $('modalContent').innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <div style="text-align:center; font-size:13px; color:var(--text-muted); margin-bottom:4px;">واکنش سریع</div>
-      <div class="reaction-bar" style="justify-content:center;">
-        <button class="reaction-btn" onclick="reactMsg(${m.id},'👍')">👍</button>
-        <button class="reaction-btn" onclick="reactMsg(${m.id},'❤️')">❤️</button>
-        <button class="reaction-btn" onclick="reactMsg(${m.id},'😂')">😂</button>
-        <button class="reaction-btn" onclick="reactMsg(${m.id},'🔥')">🔥</button>
-        <button class="reaction-btn" onclick="reactMsg(${m.id},'👏')">👏</button>
-      </div>
-      ${m.sender_id === meId ? `<button onclick="editMsgPrompt(${m.id},'${esc(m.body)}')" style="padding:10px; background:#1e293b; border:1px solid #334155; color:white; border-radius:10px; cursor:pointer;">ویرایش پیام</button>` : ''}
-      ${m.sender_id === meId ? `<button onclick="deleteMsg(${m.id})" style="padding:10px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; border-radius:10px; cursor:pointer;">حذف پیام</button>` : ''}
-      <button onclick="closeModal()" style="padding:10px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer; margin-top:6px;">بستن</button>
-    </div>
-  `;
-  $('modalOverlay').classList.remove('hidden');
-}
-
-async function reactMsg(id, r) { await api(`/api/messages/${id}/react`, {method:'POST', body:JSON.stringify({reaction:r})}); closeModal(); reloadChat(); }
-async function deleteMsg(id) { await api(`/api/messages/${id}/delete`, {method:'POST'}); closeModal(); reloadChat(); }
-async function editMsgPrompt(id, old) {
-  let txt = prompt('متن جدید پیام:', old);
-  if(txt) { await api(`/api/messages/${id}/edit`, {method:'POST', body:JSON.stringify({body:txt})}); closeModal(); reloadChat(); }
-}
-async function reloadChat() { if(activeUser) openUserChat(activeUser.id, activeUser.name, activeUser.username, activeUser.avatar); }
 
 async function sendMessage(e) {
   e?.preventDefault();
@@ -627,21 +534,12 @@ async function handleFileUpload(input) {
 async function openProfileModal() {
   let me = await api('/api/me');
   $('modalContent').innerHTML = `
-    <h3 style="margin-bottom:16px; font-weight:700;">تنظیمات پروفایل</h3>
+    <h3 style="margin-bottom:16px;">تنظیمات پروفایل</h3>
     <form onsubmit="updateProfile(event)" style="display:flex; flex-direction:column; gap:12px;">
-      <div>
-        <label style="font-size:12px; color:var(--text-muted);">نام نمایشی</label>
-        <input id="pName" value="${esc(me.display_name)}" style="width:100%; padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; margin-top:4px;" required>
-      </div>
-      <div>
-        <label style="font-size:12px; color:var(--text-muted);">بیوگرافی</label>
-        <textarea id="pBio" style="width:100%; padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; margin-top:4px; height:70px; resize:none;">${esc(me.bio||'')}</textarea>
-      </div>
-      <div>
-        <label style="font-size:12px; color:var(--text-muted);">لینک عکس پروفایل (URL)</label>
-        <input id="pAvatar" value="${esc(me.avatar||'')}" placeholder="https://..." style="width:100%; padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; margin-top:4px;">
-      </div>
-      <button type="submit" style="width:100%; padding:12px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer; margin-top:6px;">ذخیره تغییرات</button>
+      <input id="pName" value="${esc(me.display_name)}" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;" required>
+      <textarea id="pBio" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; height:70px; resize:none;">${esc(me.bio||'')}</textarea>
+      <input id="pAvatar" value="${esc(me.avatar||'')}" placeholder="لینک عکس پروفایل" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;">
+      <button type="submit" style="padding:12px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer;">ذخیره</button>
     </form>
   `;
   $('modalOverlay').classList.remove('hidden');
@@ -649,15 +547,9 @@ async function openProfileModal() {
 
 async function updateProfile(e) {
   e.preventDefault();
-  let data = {
-    display_name: $('pName').value.trim(),
-    bio: $('pBio').value.trim(),
-    avatar: $('pAvatar').value.trim(),
-    phone: '', birthday: ''
-  };
-  await api('/api/profile', {method:'POST', body:JSON.stringify(data)});
+  await api('/api/profile', {method:'POST', body:JSON.stringify({display_name: $('pName').value.trim(), bio: $('pBio').value.trim(), avatar:$('pAvatar').value.trim(), phone:'', birthday:''})});
   closeModal();
-  init();
+  loadDialogs();
 }
 
 async function openHeaderProfile() {
@@ -667,25 +559,29 @@ async function openHeaderProfile() {
   $('modalContent').innerHTML = `
     <div style="text-align:center;">
       <div class="avatar" style="width:72px; height:72px; margin:0 auto 12px; font-size:24px; ${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
-      <h3 style="font-weight:700;">${esc(u.display_name)}</h3>
-      <div style="color:var(--accent); font-size:13px; margin-top:2px;">@${esc(u.username)}</div>
+      <h3>${esc(u.display_name)}</h3>
+      <div style="color:var(--accent); font-size:13px;">@${esc(u.username)}</div>
       <p style="margin:14px 0; font-size:13px; color:var(--text-muted); background:#0e1621; padding:10px; border-radius:10px;">${esc(u.bio||'بدون بیوگرافی')}</p>
-      <button onclick="closeModal()" style="width:100%; padding:10px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer;">بستن</button>
+      <button onclick="closeModal()" style="width:100%; padding:10px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold;">بستن</button>
     </div>
   `;
   $('modalOverlay').classList.remove('hidden');
 }
 
 function switchFolder(f) { loadDialogs(); }
-function scrollBottom() { $('chatMessages').scrollTop = $('chatMessages').scrollHeight; }
-function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function scrollBottom() { $('chatMessages').scrollTop =$('chatMessages').scrollHeight; }
+function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;min'}[c])); }
 
 const socket = io();
-socket.on('new_message', m => { if(activeUser && (m.sender_id===activeUser.id || m.sender_id===meId)) { appendMessage(m); scrollBottom(); } loadDialogs(); });
-socket.on('update_message', () => reloadChat());
-socket.on('delete_message', () => reloadChat());
+socket.on('new_message', m => {
+  if(activeUser && (m.sender_id===activeUser.id || m.receiver_id===activeUser.id || m.sender_id===meId)) {
+    appendMessage(m);
+    scrollBottom();
+  }
+  loadDialogs();
+});
 
-init();
+loadDialogs();
 </script>
 </body>
 </html>
