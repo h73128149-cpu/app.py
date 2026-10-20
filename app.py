@@ -132,7 +132,7 @@ def register():
                 response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, samesite="Lax")
                 return response
             except sqlite3.IntegrityError: error = "این نام کاربری قبلاً گرفته شده است."
-    response = render_template_string(AUTH, title="ساخت حساب کاربری", error=error, action="register")
+    response = app.make_response(render_template_string(AUTH, title="ساخت حساب کاربری", error=error, action="register"))
     response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, samesite="Lax")
     return response
 
