@@ -342,9 +342,18 @@ PAGE = r"""
   --border-color: #0f151d;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Vazirmatn', sans-serif; -webkit-tap-highlight-color: transparent; }
-body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-fill-available; overflow: hidden; display: flex; }
+html { height: 100%; }
+body { background: var(--bg-main); color: white; height: 100vh; height: 100dvh; overflow: hidden; display: flex; }
+button, input, textarea { font: inherit; }
+button { touch-action: manipulation; }
 
-.tg-app { display: flex; width: 100vw; height: 100%; position: relative; }
+.tg-app { display: flex; width: 100%; height: 100%; min-width: 0; position: relative; }
+@media (min-width: 769px) {
+  .tg-app { max-width: 1800px; margin-inline: auto; }
+  .chat-main { min-width: 0; }
+  .chat-messages { padding: clamp(20px, 3vw, 42px); }
+  .message-bubble { max-width: min(72%, 760px); }
+}
 .folder-rail { width: 64px; background: #0e1621; border-left: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 14px; z-index: 15; flex-shrink: 0; }
 .folder-icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; color: var(--text-muted); cursor: pointer; }
 .folder-icon.active { background: var(--panel-bg); color: var(--accent); }
@@ -380,12 +389,20 @@ body { background: var(--bg-main); color: white; height: 100vh; height: -webkit-
 .hidden { display: none !important; }
 
 @media (max-width: 768px) {
-  .folder-rail { width: 56px; }
-  .sidebar { width: calc(100vw - 56px); position: absolute; right: 56px; top: 0; height: 100%; z-index: 5; }
+  .folder-rail { width: 52px; padding-top: 10px; gap: 10px; }
+  .folder-icon { width: 40px; height: 40px; }
+  .sidebar { width: calc(100% - 52px); position: absolute; right: 52px; top: 0; height: 100%; height: 100dvh; z-index: 5; }
   .sidebar.mobile-hidden { display: none; }
-  .chat-main { width: 100vw; position: absolute; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s ease; }
+  .chat-main { width: 100%; position: absolute; inset: 0; z-index: 20; transform: translateX(100%); transition: transform 0.25s ease; height: 100%; height: 100dvh; }
   .chat-main.mobile-active { transform: translateX(0); }
   .back-btn-mobile { display: inline-block; }
+  .chat-topbar { padding: 8px 10px; height: 56px; }
+  .chat-messages { padding: 12px 10px; gap: 8px; }
+  .message-bubble { max-width: 88%; padding: 9px 11px; }
+  .chat-composer { padding: 8px; gap: 5px; }
+  .composer-input { min-width: 0; padding: 9px 10px; height: 42px; }
+  .action-btn { font-size: 20px; padding: 5px; }
+  .modal-card { padding: 18px; max-height: 86dvh; }
 }
 </style>
 </head>
@@ -489,22 +506,11 @@ async function openUserChat(id, name, username, avatar) {
   
   let d = await api('/api/messages/' + id);
   $('chatMessages').innerHTML = '';
+  seenMessageIds.clear();
   d.messages.forEach(appendMessage);
   scrollBottom();
   if(window.innerWidth <= 768) $('chatMainPanel').classList.add('mobile-active');
   loadDialogs();
-}
-
-function appendMessage(m) {
-  let isMine = m.sender_id === meId;
-  let el = document.createElement('div');
-  el.className = `message-bubble ${isMine?'mine':''}`;
-  let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
-  let bodyHtml = esc(m.body);
-  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; border-radius:10px;">`;
-  
-  el.innerHTML = `<div>${bodyHtml}</div><div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
-  $('chatMessages').appendChild(el);
 }
 
 async function sendMessage(e) {
@@ -538,16 +544,36 @@ async function openProfileModal() {
     <form onsubmit="updateProfile(event)" style="display:flex; flex-direction:column; gap:12px;">
       <input id="pName" value="${esc(me.display_name)}" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;" required>
       <textarea id="pBio" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; height:70px; resize:none;">${esc(me.bio||'')}</textarea>
-      <input id="pAvatar" value="${esc(me.avatar||'')}" placeholder="لینک عکس پروفایل" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;">
+      <input id="pAvatar" value="${esc(me.avatar||'')}" placeholder="لینک عکس پروفایل (اختیاری)" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;">
+      <label for="pAvatarFile" style="font-size:13px;color:var(--text-muted);">یا انتخاب عکس از دستگاه</label>
+      <input id="pAvatarFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp" style="width:100%;padding:8px;background:#0e1621;color:white;border-radius:10px;">
+      <img id="pAvatarPreview" alt="پیش‌نمایش عکس پروفایل" class="${me.avatar ? '' : 'hidden'}" src="${esc(me.avatar||'')}" style="width:76px;height:76px;object-fit:cover;border-radius:50%;align-self:center;">
       <button type="submit" style="padding:12px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold; cursor:pointer;">ذخیره</button>
     </form>
   `;
   $('modalOverlay').classList.remove('hidden');
+  $('pAvatarFile').addEventListener('change', () => {
+    const file = $('pAvatarFile').files[0];
+    if (!file) return;
+    const preview = $('pAvatarPreview');
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove('hidden');
+  });
 }
 
 async function updateProfile(e) {
   e.preventDefault();
-  await api('/api/profile', {method:'POST', body:JSON.stringify({display_name: $('pName').value.trim(), bio: $('pBio').value.trim(), avatar:$('pAvatar').value.trim(), phone:'', birthday:''})});
+  let avatar = $('pAvatar').value.trim();
+  const avatarFile = $('pAvatarFile')?.files?.[0];
+  if (avatarFile) {
+    const fd = new FormData();
+    fd.append('file', avatarFile);
+    const uploaded = await fetch('/api/upload', {method:'POST', body:fd});
+    const uploadData = await uploaded.json();
+    if (!uploaded.ok) { alert(uploadData.error || 'بارگذاری عکس انجام نشد'); return; }
+    avatar = location.origin + uploadData.url;
+  }
+  await api('/api/profile', {method:'POST', body:JSON.stringify({display_name: $('pName').value.trim(), bio: $('pBio').value.trim(), avatar, phone:'', birthday:''})});
   closeModal();
   loadDialogs();
 }
@@ -570,13 +596,49 @@ async function openHeaderProfile() {
 
 function switchFolder(f) { loadDialogs(); }
 function scrollBottom() { $('chatMessages').scrollTop =$('chatMessages').scrollHeight; }
-function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;min'}[c])); }
+function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+const seenMessageIds = new Set();
+function appendMessage(m) {
+  if (m.id != null && seenMessageIds.has(m.id)) return;
+  if (m.id != null) seenMessageIds.add(m.id);
+  let isMine = m.sender_id === meId;
+  let el = document.createElement('div');
+  el.dataset.messageId = m.id ?? '';
+  el.className = `message-bubble ${isMine?'mine':''}`;
+  let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
+  let bodyHtml = esc(m.body);
+  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; max-height:360px; border-radius:10px; object-fit:contain;">`;
+  el.innerHTML = `<div>${bodyHtml}</div><div class="msg-time">${(m.created_at||'').slice(11,16)}${ticks}</div>`;
+  $('chatMessages').appendChild(el);
+}
+
+if ('Notification' in window && Notification.permission === 'default') {
+  // Permission is requested only after the user explicitly interacts with the page.
+  document.addEventListener('click', function askNotificationPermission() {
+    if (Notification.permission === 'default') Notification.requestPermission();
+    document.removeEventListener('click', askNotificationPermission);
+  }, {once:true});
+}
 const socket = io();
 socket.on('new_message', m => {
-  if(activeUser && (m.sender_id===activeUser.id || m.receiver_id===activeUser.id || m.sender_id===meId)) {
+  const belongsToOpenChat = activeUser &&
+    ((m.sender_id === meId && m.receiver_id === activeUser.id) ||
+     (m.sender_id === activeUser.id && m.receiver_id === meId) ||
+     (activeUser.id === meId && m.sender_id === meId && m.receiver_id === meId));
+  if (belongsToOpenChat) {
     appendMessage(m);
     scrollBottom();
+  }
+  if (m.receiver_id === meId && m.sender_id !== meId) {
+    if ('Notification' in window && Notification.permission === 'granted' &&
+        (document.hidden || !belongsToOpenChat)) {
+      new Notification('پیام جدید از ' + (m.sender_name || 'یک کاربر'), {
+        body: m.msg_type === 'image' ? 'یک فایل برای شما فرستاده شد' : (m.body || 'پیام جدید'),
+        tag: 'message-' + m.id
+      });
+    }
+    if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
   }
   loadDialogs();
 });
