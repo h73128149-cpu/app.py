@@ -440,6 +440,27 @@ def on_disconnect():
     if u:
         db().execute("UPDATE users SET online=0,last_seen=? WHERE id=?",(now(),u["id"])); db().commit()
 
+@socketio.on("typing")
+def on_typing(data):
+    """Relay typing state only from an authenticated user to a valid recipient."""
+    u = current_user()
+    if not u or not isinstance(data, dict):
+        return
+    try:
+        receiver_id = int(data.get("receiver_id"))
+    except (TypeError, ValueError):
+        return
+    if receiver_id == u["id"]:
+        return
+    exists = db().execute("SELECT id FROM users WHERE id=?", (receiver_id,)).fetchone()
+    if not exists:
+        return
+    emit("typing_status", {
+        "sender_id": u["id"],
+        "sender_name": u["display_name"],
+        "is_typing": bool(data.get("is_typing"))
+    }, room=f"user:{receiver_id}")
+
 AUTH = r"""
 <!doctype html>
 <html lang="fa" dir="rtl">
@@ -607,7 +628,8 @@ body { background: radial-gradient(ellipse at 75% 0%, #13243a 0%, #0b111b 48%, #
 <div class="tg-app">
   <div class="folder-rail">
     <div class="folder-icon active" onclick="switchFolder('all')">💬</div>
-    <div class="folder-icon" onclick="openProfileModal()" title="تنظیمات">⚙️</div>
+    <div class="folder-icon" onclick="openProfileModal()" title="پروفایل من">👤</div>
+    <div class="folder-icon" onclick="openAppSettings()" title="تنظیمات و تم‌ها">🎨</div>
     <div class="folder-icon" onclick="createGroup()" title="ساخت گروه">👥</div>
   </div>
 
@@ -647,7 +669,7 @@ body { background: radial-gradient(ellipse at 75% 0%, #13243a 0%, #0b111b 48%, #
       <button type="button" class="action-btn" onclick="$('fileInput').click()" title="ارسال فایل">📎</button>
       <input type="file" id="fileInput" hidden onchange="handleFileUpload(this)">
       <button type="button" class="action-btn" id="voiceBtn" onclick="toggleVoiceRecording()" title="ضبط پیام صوتی">🎙️</button>
-      <textarea id="messageInput" class="composer-input" placeholder="نوشتن پیام..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
+      <textarea id="messageInput" class="composer-input" placeholder="نوشتن پیام..." oninput="notifyTyping()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
       <button type="submit" class="action-btn" style="color: var(--accent);">➤</button>
     </form>
   </main>
@@ -723,11 +745,31 @@ async function searchUsers() {
   `).join('');
 }
 
+function updateChatPresence(user) {
+  if (!activeUser || user.id !== activeUser.id) return;
+  const status = $('chatStatus');
+  if (user.online) {
+    status.textContent = '● آنلاین';
+    status.style.color = '#4ade80';
+  } else if (user.last_seen) {
+    status.textContent = 'آخرین بازدید: ' + formatLastSeen(user.last_seen);
+    status.style.color = 'var(--text-muted)';
+  } else {
+    status.textContent = 'آخرین بازدید مخفی است';
+    status.style.color = 'var(--text-muted)';
+  }
+}
+
 async function openUserChat(id, name, username, avatar) {
   activeGroup = null;
   activeUser = {id, name, username, avatar};
   $('chatTitle').textContent = name;
   $('chatStatus').textContent = '@' + username;
+  try {
+    const profileData = await api('/api/users?q=' + encodeURIComponent(username));
+    const profile = profileData.users.find(x => x.id === id);
+    if (profile) updateChatPresence(profile);
+  } catch (_) {}
   if(avatar) $('activeAvatar').style.backgroundImage = `url('${avatar}')`;
   else { $('activeAvatar').style.backgroundImage = '';$('activeAvatar').textContent = name[0]; }
   
@@ -741,10 +783,27 @@ async function openUserChat(id, name, username, avatar) {
   loadDialogs();
 }
 
+let typingStopTimer = null;
+let lastTypingSent = 0;
+function notifyTyping() {
+  if (!activeUser || activeGroup) return;
+  const value = $('messageInput').value.trim();
+  const nowMs = Date.now();
+  if (value && nowMs - lastTypingSent > 700) {
+    socket.emit('typing', {receiver_id: activeUser.id, is_typing: true});
+    lastTypingSent = nowMs;
+  }
+  clearTimeout(typingStopTimer);
+  typingStopTimer = setTimeout(() => {
+    if (activeUser && !activeGroup) socket.emit('typing', {receiver_id: activeUser.id, is_typing: false});
+  }, 1500);
+}
+
 async function sendMessage(e) {
   e?.preventDefault();
   let body = $('messageInput').value.trim();
   if(!body || (!activeUser && !activeGroup)) return;
+  if (activeUser && !activeGroup) socket.emit('typing', {receiver_id: activeUser.id, is_typing: false});
   let d;
   if(activeGroup) d = await api('/api/groups/'+activeGroup.id+'/messages', {method:'POST', body:JSON.stringify({body})});
   else d = await api('/api/messages', {method:'POST', body:JSON.stringify({receiver_id: activeUser.id, body})});
@@ -771,7 +830,7 @@ async function openProfileModal() {
   let me = await api('/api/me');
   let settings = await api('/api/settings');
   $('modalContent').innerHTML = `
-    <h3 style="margin-bottom:16px;">تنظیمات پروفایل</h3><button type="button" onclick="openAppSettings()" style="margin-bottom:12px;padding:10px;background:#334155;border:0;color:white;border-radius:10px">⚙️ تنظیمات برنامه</button>
+    <h3 style="margin-bottom:16px;">پروفایل من</h3><p style="color:var(--text-muted);font-size:12px;margin-bottom:12px">اطلاعات و عکس پروفایل خودت را ویرایش کن.</p>
     <form onsubmit="updateProfile(event)" style="display:flex; flex-direction:column; gap:12px;">
       <input id="pName" value="${esc(me.display_name)}" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px;" required>
       <textarea id="pBio" style="padding:10px; background:#0e1621; border:1px solid #334155; color:white; border-radius:10px; height:70px; resize:none;">${esc(me.bio||'')}</textarea>
@@ -797,11 +856,11 @@ async function openProfileModal() {
 
 async function openAppSettings() {
   const d = await api('/api/settings');
-  $('modalContent').innerHTML = `<h3 style="margin-bottom:14px">تنظیمات برنامه</h3>
+  $('modalContent').innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:25px">🎨</div><div><h3>تنظیمات برنامه</h3><div style="font-size:12px;color:var(--text-muted);margin-top:3px">ظاهر، حریم خصوصی و تجربهٔ گفتگو</div></div></div><hr style="border:0;border-top:1px solid var(--border-color);margin:12px 0">
     <label style="display:block;margin:10px 0">پس‌زمینه چت (رنگ مثل #101820 یا لینک تصویر)</label>
     <input id="settingBg" value="${esc(d.chat_background||'')}" placeholder="#101820 یا https://..." style="width:100%;padding:10px;background:#0e1621;color:white;border:1px solid #334155;border-radius:8px">
     <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> اجازه نمایش آخرین بازدید من</label>
-    <label style="display:block;margin:12px 0 6px">انتخاب تم</label><select id="settingTheme" style="width:100%;padding:11px;background:#0e1621;color:white;border:1px solid #334155;border-radius:9px"><option value="dark" ${d.theme==='dark'?'selected':''}>Dark Pro</option><option value="telegram" ${d.theme==='telegram'?'selected':''}>Telegram Blue</option><option value="neon" ${d.theme==='neon'?'selected':''}>Neon Cyber</option><option value="crimson" ${d.theme==='crimson'?'selected':''}>Crimson</option><option value="matrix" ${d.theme==='matrix'?'selected':''}>Matrix</option><option value="amoled" ${d.theme==='amoled'?'selected':''}>AMOLED</option></select>
+    <label style="display:block;margin:12px 0 6px">انتخاب تم</label><select id="settingTheme" onchange="applyTheme(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:white;border:1px solid var(--border-color);border-radius:9px"><option value="dark" ${d.theme==='dark'?'selected':''}>🌌 Dark Pro</option><option value="telegram" ${d.theme==='telegram'?'selected':''}>🔵 Telegram Blue</option><option value="neon" ${d.theme==='neon'?'selected':''}>💜 Neon Cyber</option><option value="crimson" ${d.theme==='crimson'?'selected':''}>🔴 Crimson</option><option value="matrix" ${d.theme==='matrix'?'selected':''}>🟢 Matrix</option><option value="amoled" ${d.theme==='amoled'?'selected':''}>⚫ AMOLED</option></select><div style="display:flex;gap:7px;margin:10px 0 16px;flex-wrap:wrap"><span style="width:22px;height:22px;border-radius:50%;background:#43c6ff;border:2px solid #ffffff55"></span><span style="width:22px;height:22px;border-radius:50%;background:#b66cff;border:2px solid #ffffff55"></span><span style="width:22px;height:22px;border-radius:50%;background:#ff4568;border:2px solid #ffffff55"></span><span style="width:22px;height:22px;border-radius:50%;background:#49ff8b;border:2px solid #ffffff55"></span><span style="font-size:11px;color:var(--text-muted);align-self:center">با انتخاب تم، پیش‌نمایش فوری می‌بینی.</span></div>
     <button onclick="saveAppSettings()" style="padding:11px;background:var(--accent);border:0;color:white;border-radius:10px">ذخیره تنظیمات</button>
     <button onclick="closeModal()" style="padding:11px;background:#334155;border:0;color:white;border-radius:10px;margin-right:6px">بستن</button>`;
 }
@@ -977,6 +1036,27 @@ if ('Notification' in window && Notification.permission === 'default') {
   }, {once:true});
 }
 const socket = io();
+let typingResetTimer = null;
+socket.on('typing_status', data => {
+  if (!activeUser || activeGroup || data.sender_id !== activeUser.id) return;
+  const status = $('chatStatus');
+  if (data.is_typing) {
+    status.textContent = 'در حال نوشتن…';
+    status.style.color = 'var(--accent)';
+    clearTimeout(typingResetTimer);
+    typingResetTimer = setTimeout(async () => {
+      if (!activeUser || activeGroup) return;
+      try {
+        const d = await api('/api/users?q=' + encodeURIComponent(activeUser.username));
+        const u = d.users.find(x => x.id === activeUser.id);
+        if (u) updateChatPresence(u); else status.textContent = '@' + activeUser.username;
+      } catch (_) { status.textContent = '@' + activeUser.username; }
+    }, 2200);
+  } else {
+    clearTimeout(typingResetTimer);
+    status.textContent = '@' + activeUser.username;
+  }
+});
 socket.on('group_message', m => { if(activeGroup && activeGroup.id===m.group_id){ appendMessage(m,true); scrollBottom(); } });
 socket.on('update_message', m => {
   if (activeUser && (m.sender_id === activeUser.id || m.receiver_id === activeUser.id)) refreshActiveChat();
