@@ -569,6 +569,34 @@ body[data-theme="light"] .message-bubble:not(.mine) { background:#f2f2f2 !import
 body[data-theme="light"] input, body[data-theme="light"] textarea, body[data-theme="light"] select { color:#111 !important; }
 
 </style>
+
+<style id="pr-enhancements">
+.system-notice{margin:auto;max-width:390px;padding:28px 24px;text-align:center;border:1px solid var(--border-color);border-radius:20px;background:var(--panel-bg);box-shadow:0 18px 55px #0003;animation:prNoticeIn .22s ease-out}
+.system-notice-icon{font-size:36px;margin-bottom:12px}.system-notice strong{font-size:18px}.system-notice p{margin:10px 0 18px;color:var(--text-muted);line-height:1.8;font-size:13px}.system-notice button{border:1px solid var(--border-color);border-radius:10px;padding:9px 15px;background:var(--bg-main);color:var(--text-main,white);cursor:pointer}
+@keyframes prNoticeIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+</style>
+
+<style id="pr-premium-auth">
+:root{color-scheme:dark}
+body{position:relative;isolation:isolate;background:#050505!important;overflow-x:hidden;padding:24px}
+body:before{content:"";position:fixed;inset:0;z-index:-2;background:radial-gradient(ellipse at 18% 15%,#ffffff15,transparent 35%),radial-gradient(ellipse at 85% 85%,#ffffff10,transparent 34%),linear-gradient(135deg,#050505,#101010 48%,#030303)}
+body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-events:none;background-image:linear-gradient(#ffffff09 1px,transparent 1px),linear-gradient(90deg,#ffffff09 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,black,transparent 88%)}
+.auth-card{position:relative;width:min(460px,100%);padding:clamp(28px,5vw,46px);text-align:right;border-radius:28px;background:linear-gradient(145deg,#171717ed,#090909f5)!important;border:1px solid #ffffff20;box-shadow:0 35px 100px #000b,0 0 0 7px #ffffff04,inset 0 1px #ffffff12;backdrop-filter:blur(22px);overflow:hidden;animation:prAuthIn .55s cubic-bezier(.2,.8,.2,1) both}
+.auth-card:before{content:"PR";display:grid;place-items:center;width:66px;height:66px;margin:0 0 24px auto;border-radius:22px;background:linear-gradient(145deg,#fff,#bdbdbd);color:#080808;font-size:25px;font-weight:1000;letter-spacing:-2px;box-shadow:0 12px 35px #ffffff18;transform:rotate(-5deg)}
+.auth-card:after{content:"PRIVATE • FAST • CONNECTED";display:block;margin-top:28px;padding-top:18px;border-top:1px solid #ffffff13;color:#777;font-size:10px;letter-spacing:2px;text-align:center;direction:ltr}
+.auth-card h2{font-size:clamp(23px,4vw,30px)!important;line-height:1.5;margin-bottom:7px!important;color:#fff;letter-spacing:-.7px}
+.auth-card h2:after{content:"ارتباطی ساده، تجربه‌ای حرفه‌ای";display:block;margin-top:7px;color:#888;font-size:12px;font-weight:400;letter-spacing:0}
+.auth-card form{margin-top:25px}
+.auth-card input{height:54px;padding:0 17px;margin-bottom:13px;border:1px solid #ffffff17;border-radius:15px;background:#050505!important;color:#fff;transition:border .2s,box-shadow .2s,transform .2s}
+.auth-card input::placeholder{color:#777}
+.auth-card input:focus{border-color:#e5e5e5;box-shadow:0 0 0 4px #ffffff0b;transform:translateY(-1px)}
+.auth-card button{height:54px;margin-top:5px;border-radius:15px;background:linear-gradient(135deg,#fff,#cfcfcf)!important;color:#050505!important;font-size:15px;font-weight:900;box-shadow:0 12px 28px #ffffff12;transition:transform .18s,filter .18s}
+.auth-card button:hover{transform:translateY(-2px);filter:brightness(1.08)}
+.auth-card a{display:inline-flex;margin-top:3px;color:#eee!important;font-size:13px;text-decoration:underline;text-decoration-color:#555;text-underline-offset:5px}
+.error{border:1px solid #ffffff20;background:#ffffff0c!important;color:#fff!important;border-radius:13px}
+@keyframes prAuthIn{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:480px){body{padding:16px}.auth-card{border-radius:23px;padding:28px 22px}.auth-card:before{width:58px;height:58px}}
+</style>
 </head>
 <body>
 <div class="auth-card">
@@ -712,6 +740,61 @@ body { background: radial-gradient(ellipse at 75% 0%, #13243a 0%, #0b111b 48%, #
 .chat-list::-webkit-scrollbar,.chat-messages::-webkit-scrollbar { width:6px; }
 .chat-list::-webkit-scrollbar-thumb,.chat-messages::-webkit-scrollbar-thumb { background:#344b63; border-radius:8px; }
 @media (min-width:769px) { .chat-topbar { height:72px; } .message-bubble { max-width:min(68%,760px); } }
+</style>
+<style id="pr-premium-app">
+/* Premium monochrome redesign — keeps the existing app structure and handlers */
+:root{--bg-main:#080808;--panel-bg:#111;--panel-hover:#1c1c1c;--active-bg:#292929;--accent:#f4f4f4;--bubble-out:#303030;--bubble-in:#171717;--text-muted:#969696;--border-color:#292929;--text-main:#f5f5f5;--button-text:#080808}
+body{background:#070707!important;color:#f5f5f5}
+.tg-app{background:#080808;isolation:isolate}
+.folder-rail{background:#080808!important;border-color:#242424!important;box-shadow:8px 0 30px #0005;padding-top:18px;gap:15px}
+.folder-icon{border:1px solid transparent;color:#858585;transition:all .2s ease}
+.folder-icon:hover{background:#1b1b1b!important;color:#fff;transform:translateY(-2px)}
+.folder-icon.active{background:#f1f1f1!important;color:#090909!important;box-shadow:0 7px 22px #fff1}
+.sidebar{background:linear-gradient(180deg,#121212,#0b0b0b)!important;border-color:#252525!important;box-shadow:12px 0 35px #0002}
+.sidebar-header{background:#101010!important;border-bottom:1px solid #292929!important;padding:17px 16px;gap:12px}
+.search-container{background:#080808!important;border:1px solid #292929!important;border-radius:14px;height:44px}
+.search-container:focus-within{border-color:#777!important;box-shadow:0 0 0 3px #fff0a!important}
+.search-container input{color:#fff!important}
+.chat-row{padding:14px 16px;border-bottom:1px solid #ffffff08;transition:background .18s,transform .18s}
+.chat-row:hover{background:#1b1b1b!important;transform:translateX(-2px)}
+.chat-row.active{background:linear-gradient(100deg,#252525,#171717)!important;box-shadow:inset -3px 0 #f3f3f3}
+.avatar{background-color:#303030!important;color:#fff!important;border:1px solid #ffffff20;box-shadow:0 5px 18px #0008}
+.chat-main{background:radial-gradient(ellipse at 50% -15%,#171717,#080808 62%)!important}
+.chat-topbar{height:72px;background:#101010f5!important;border-bottom:1px solid #282828!important;box-shadow:0 6px 25px #0004;padding-inline:20px;backdrop-filter:blur(18px)}
+.chat-topbar-info{gap:14px}
+.chat-messages{background-color:#090909!important;background-image:radial-gradient(#ffffff09 1px,transparent 1px)!important;background-size:22px 22px!important;padding:clamp(16px,3vw,36px)}
+.message-bubble{padding:11px 15px;border:1px solid #ffffff0b;box-shadow:0 5px 20px #0003;font-size:14px;line-height:1.8}
+.message-bubble.mine{background:linear-gradient(145deg,#383838,#242424)!important;color:#fff;border-radius:18px 18px 5px 18px}
+.message-bubble:not(.mine){background:linear-gradient(145deg,#1b1b1b,#141414)!important;color:#f1f1f1;border-radius:18px 18px 18px 5px}
+.msg-time{color:#aaa!important}
+.chat-composer{background:#101010f5!important;border-top:1px solid #292929!important;padding:13px 18px;backdrop-filter:blur(18px)}
+.composer-input{background:#080808!important;border:1px solid #2b2b2b!important;border-radius:15px;color:#fff!important;transition:border .2s,box-shadow .2s}
+.composer-input:focus{border-color:#777!important;box-shadow:0 0 0 3px #ffffff09}
+.action-btn{color:#aaa!important;transition:all .18s}
+.action-btn:hover{background:#292929!important;color:#fff!important;transform:scale(1.07)}
+.modal-overlay{background:#000b!important;backdrop-filter:blur(9px)}
+.modal-card{background:linear-gradient(145deg,#191919,#0d0d0d)!important;border:1px solid #373737!important;border-radius:23px!important;box-shadow:0 30px 100px #000c!important;color:#f5f5f5}
+.modal-card input,.modal-card textarea,.modal-card select{background:#080808!important;color:#fff!important;border:1px solid #303030!important;border-radius:12px}
+button{transition:filter .18s,transform .18s}
+button:hover{filter:brightness(1.12)}
+input,textarea,select{accent-color:#fff}
+.chat-list::-webkit-scrollbar,.chat-messages::-webkit-scrollbar{width:6px}
+.chat-list::-webkit-scrollbar-thumb,.chat-messages::-webkit-scrollbar-thumb{background:#3a3a3a;border-radius:10px}
+.system-notice{background:linear-gradient(145deg,#191919,#0d0d0d)!important;border-color:#353535!important}
+.system-notice button{background:#f1f1f1!important;color:#080808!important;border:0!important;font-weight:800}
+/* White theme remains strictly monochrome */
+body[data-theme="light"]{--bg-main:#f5f5f5;--panel-bg:#fff;--panel-hover:#eee;--active-bg:#e4e4e4;--accent:#111;--bubble-out:#dedede;--bubble-in:#f1f1f1;--text-muted:#666;--border-color:#ddd;color:#111!important;background:#f5f5f5!important}
+body[data-theme="light"] .tg-app,body[data-theme="light"] .folder-rail,body[data-theme="light"] .chat-main,body[data-theme="light"] .chat-messages{background:#f5f5f5!important;color:#111!important}
+body[data-theme="light"] .sidebar,body[data-theme="light"] .sidebar-header,body[data-theme="light"] .chat-topbar,body[data-theme="light"] .chat-composer,body[data-theme="light"] .modal-card{background:#fff!important;color:#111!important;border-color:#ddd!important}
+body[data-theme="light"] .chat-row.active{background:#e6e6e6!important;box-shadow:inset -3px 0 #111}
+body[data-theme="light"] .message-bubble,body[data-theme="light"] .message-bubble.mine,body[data-theme="light"] .message-bubble:not(.mine){background:#e6e6e6!important;color:#111!important;border-color:#ddd}
+body[data-theme="light"] .composer-input,body[data-theme="light"] .search-container,body[data-theme="light"] .modal-card input,body[data-theme="light"] .modal-card textarea,body[data-theme="light"] .modal-card select{background:#f7f7f7!important;color:#111!important;border-color:#ddd!important}
+body[data-theme="light"] .folder-icon{color:#555}
+body[data-theme="light"] .folder-icon.active{background:#111!important;color:#fff!important}
+body[data-theme="light"] .avatar{background:#ddd!important;color:#111!important;border-color:#ccc}
+@media(min-width:769px){.sidebar{width:clamp(320px,29vw,410px)}.chat-messages{padding:clamp(24px,3vw,44px)}.message-bubble{max-width:min(70%,760px)}}
+@media(max-width:768px){.sidebar{background:#0c0c0c!important}.chat-topbar{height:60px;padding-inline:10px}.chat-composer{padding:9px}.chat-messages{padding:12px 10px}.message-bubble{max-width:88%}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
@@ -1036,9 +1119,17 @@ function showContactMore(){
 }
 async function blockContactDemo(){
   if (!activeUser) return;
-  if (!confirm('این مخاطب مسدود شود؟')) return;
-  try { await api('/api/block/'+activeUser.id,{method:'POST'}); closeModal(); alert(getAppLanguage()==='en'?'Contact blocked.':'مخاطب مسدود شد.'); activeUser=null; loadDialogs(); }
-  catch(e){ alert(e.message); }
+  const en=getAppLanguage()==='en';
+  if (!confirm(en?'Block this contact? They will not be able to message you.':'این مخاطب مسدود شود؟ پس از مسدودسازی امکان پیام‌دادن بین شما محدود می‌شود.')) return;
+  const blockedName=activeUser.display_name || activeUser.username || (en?'Contact':'مخاطب');
+  try {
+    await api('/api/block/'+activeUser.id,{method:'POST'});
+    closeModal();
+    showToast(en?'🚫 Contact blocked':'🚫 مخاطب مسدود شد');
+    $('chatMessages').innerHTML=`<div class="system-notice"><div class="system-notice-icon">🚫</div><strong>${en?'Contact blocked':'مخاطب مسدود شد'}</strong><p>${en?'You blocked this contact. Messages between you are restricted.':'این مخاطب را مسدود کردی. ارسال پیام بین شما محدود شده است.'}</p><button onclick="loadDialogs()">${en?'Back to chats':'بازگشت به گفتگوها'}</button></div>`;
+    activeUser=null;
+    loadDialogs();
+  } catch(e){ showToast('⚠️ '+e.message); }
 }
 async function showContactMedia(){
   if (!activeUser) return;
@@ -1055,6 +1146,11 @@ async function showContactMedia(){
 }
 
 
+function showToast(message) {
+  let el=document.getElementById('prToast');
+  if(!el){ el=document.createElement('div'); el.id='prToast'; el.setAttribute('role','status'); el.style.cssText='position:fixed;z-index:99999;bottom:24px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);padding:12px 18px;border:1px solid var(--border-color);border-radius:14px;background:var(--panel-bg);color:var(--text-main,white);box-shadow:0 12px 40px #0008;font-size:14px;text-align:center;opacity:0;transition:opacity .18s'; document.body.appendChild(el); }
+  el.textContent=message; el.style.opacity='1'; clearTimeout(window.__prToastTimer); window.__prToastTimer=setTimeout(()=>{el.style.opacity='0'},2600);
+}
 function formatLastSeen(value) {
   if (!value) return 'نامشخص';
   const d = new Date(value);
@@ -1078,10 +1174,13 @@ async function refreshActiveChat() {
   $('chatMessages').innerHTML = ''; seenMessageIds.clear(); d.messages.forEach(appendMessage); scrollBottom();
 }
 async function blockUser(id) {
-  if (!confirm('این کاربر بلاک شود؟')) return;
-  await api('/api/block/' + id, {method:'POST'}); closeModal();
-  $('chatMessages').innerHTML = '<div style="margin:auto;color:var(--text-muted)">این کاربر بلاک شد.</div>';
-  activeUser = null; loadDialogs();
+  const en=getAppLanguage()==='en';
+  if (!confirm(en?'Block this user?':'این کاربر مسدود شود؟')) return;
+  try {
+    await api('/api/block/' + id, {method:'POST'}); closeModal();
+    $('chatMessages').innerHTML = `<div class="system-notice"><div class="system-notice-icon">🚫</div><strong>${en?'User blocked':'کاربر مسدود شد'}</strong><p>${en?'Messaging with this user is now restricted.':'ارسال پیام بین شما محدود شده است.'}</p><button onclick="loadDialogs()">${en?'Back to chats':'بازگشت به گفتگوها'}</button></div>`;
+    showToast(en?'🚫 User blocked':'🚫 کاربر مسدود شد'); activeUser = null; loadDialogs();
+  } catch(e) { showToast('⚠️ '+e.message); }
 }
 async function deleteChat(id) {
   if (!confirm('گفتگو فقط از فهرست شما حذف شود؟ پیام‌های طرف مقابل پاک نمی‌شوند.')) return;
