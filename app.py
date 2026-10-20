@@ -477,6 +477,31 @@ input { width: 100%; padding: 12px 16px; margin-bottom: 14px; background: #0b132
 button { width: 100%; padding: 12px; background: #2AABEE; border: none; border-radius: 12px; color: white; font-weight: bold; cursor: pointer; }
 .error { background: rgba(239,68,68,0.15); color: #fca5a5; padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
 a { color: #2AABEE; text-decoration: none; font-size: 13px; }
+
+/* Theme overrides: make every main surface respond to the selected theme */
+body[data-theme="dark"] .chat-main,
+body[data-theme="telegram"] .chat-main,
+body[data-theme="neon"] .chat-main,
+body[data-theme="crimson"] .chat-main,
+body[data-theme="matrix"] .chat-main,
+body[data-theme="amoled"] .chat-main { background:var(--bg-main) !important; }
+body[data-theme] .folder-rail { background:var(--bg-main) !important; border-color:var(--border-color) !important; }
+body[data-theme] .sidebar,
+body[data-theme] .sidebar-header,
+body[data-theme] .chat-topbar,
+body[data-theme] .chat-composer,
+body[data-theme] .modal-card { background:var(--panel-bg) !important; border-color:var(--border-color) !important; }
+body[data-theme] .search-container,
+body[data-theme] .composer-input { background:var(--bg-main) !important; border-color:var(--border-color) !important; }
+body[data-theme] .chat-messages { background-color:var(--bg-main) !important; }
+body[data-theme] .chat-row:hover { background:var(--panel-hover) !important; }
+body[data-theme] .chat-row.active { background:var(--active-bg) !important; }
+body[data-theme] .message-bubble.mine { background:var(--bubble-out) !important; }
+body[data-theme] .message-bubble:not(.mine) { background:var(--bubble-in) !important; }
+body[data-theme] .action-btn:hover { background:var(--panel-hover) !important; }
+body[data-theme] .folder-icon.active { background:var(--panel-bg) !important; color:var(--accent) !important; }
+body[data-theme] button[onclick="saveAppSettings()"] { background:var(--accent) !important; }
+
 </style>
 </head>
 <body>
@@ -889,20 +914,57 @@ async function updateProfile(e) {
 }
 
 async function openHeaderProfile() {
-  if(!activeUser) return;
-  let d = await api('/api/users?q=' + encodeURIComponent(activeUser.username));
-  let u = d.users.find(x => x.id === activeUser.id) || activeUser;
+  if(!activeUser || activeGroup) return;
+  let u = {...activeUser};
+  try {
+    const d = await api('/api/users?q=' + encodeURIComponent(activeUser.username));
+    u = {...u, ...(d.users.find(x => x.id === activeUser.id) || {})};
+  } catch (_) {}
+  const online = !!u.online;
+  const seen = online ? '● آنلاین' : (u.last_seen ? 'آخرین بازدید ' + formatLastSeen(u.last_seen) : 'آخرین بازدید مخفی است');
+  const avatarStyle = u.avatar ? `background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;` : '';
+  const safeName = esc(u.display_name || activeUser.name || 'مخاطب');
+  const safeUsername = esc(u.username || activeUser.username || '');
   $('modalContent').innerHTML = `
-    <div style="text-align:center;">
-      <div class="avatar" style="width:72px; height:72px; margin:0 auto 12px; font-size:24px; ${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
-      <h3>${esc(u.display_name)}</h3>
-      <div style="color:var(--accent); font-size:13px;">@${esc(u.username)}</div>
-      <p style="margin:14px 0; font-size:13px; color:var(--text-muted); background:#0e1621; padding:10px; border-radius:10px;">${esc(u.bio||'بدون بیوگرافی')}</p>
-      <button onclick="closeModal()" style="width:100%; padding:10px; background:var(--accent); border:none; color:white; border-radius:10px; font-weight:bold;">بستن</button>
-    </div>
-  `;
+    <div style="position:relative;margin:-4px -4px 0;">
+      <button onclick="closeModal()" aria-label="بستن" style="position:absolute;left:0;top:0;border:0;background:transparent;color:#dce6ef;font-size:25px;cursor:pointer">×</button>
+      <div style="text-align:center;padding:10px 18px 16px;">
+        <div class="avatar" style="width:82px;height:82px;margin:0 auto 10px;font-size:27px;${avatarStyle}">${u.avatar?'':safeName.slice(0,1)}</div>
+        <h3 style="font-size:19px;margin-bottom:4px">${safeName}</h3>
+        <div style="font-size:13px;color:var(--accent)">@${safeUsername}</div>
+        <div style="font-size:12px;color:${online?'#4ade80':'var(--text-muted)'};margin-top:7px">${esc(seen)}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0 0 16px">
+        <button onclick="closeModal();focusMessageInput()" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">☏</div><small>پیام</small></button>
+        <button onclick="toggleContactMute()" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">🔕</div><small>بی‌صدا</small></button>
+        <button onclick="alert('تماس صوتی هنوز به سرور تماس متصل نشده است.')" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">📞</div><small>تماس</small></button>
+        <button onclick="showContactMore()" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">•••</div><small>بیشتر</small></button>
+      </div>
+      <div style="background:var(--bg-main);border-radius:12px;padding:13px 14px;display:grid;gap:13px;font-size:13px">
+        ${u.phone?`<div><div>${esc(u.phone)}</div><small style="color:var(--text-muted)">شماره تلفن</small></div>`:''}
+        <div><div style="line-height:1.8;overflow-wrap:anywhere">${esc(u.bio||'بدون بیوگرافی')}</div><small style="color:var(--text-muted)">بیوگرافی</small></div>
+        <div><div style="color:var(--accent)">@${safeUsername}</div><small style="color:var(--text-muted)">نام کاربری</small></div>
+        ${u.birthday?`<div><div>${esc(u.birthday)}</div><small style="color:var(--text-muted)">تاریخ تولد</small></div>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <button onclick="showContactMedia()" style="border:1px solid var(--border-color);border-radius:10px;background:transparent;color:var(--accent);padding:10px;cursor:pointer">🖼 رسانه‌های گفتگو</button>
+        <button onclick="closeModal();openUserChat(${Number(u.id||activeUser.id)},'${safeName}','${safeUsername}','${esc(u.avatar||'')}')" style="border:1px solid var(--border-color);border-radius:10px;background:transparent;color:white;padding:10px;cursor:pointer">رفتن به گفتگو</button>
+      </div>
+    </div>`;
   $('modalOverlay').classList.remove('hidden');
 }
+function focusMessageInput(){ $('messageInput')?.focus(); }
+function toggleContactMute(){
+  const key='pr-muted-'+(activeUser?.id||'');
+  const muted=localStorage.getItem(key)==='1';
+  localStorage.setItem(key,muted?'0':'1');
+  alert(muted?'اعلان‌های این مخاطب در این مرورگر از حالت بی‌صدا خارج شد.':'این مخاطب در این مرورگر بی‌صدا شد.');
+}
+function showContactMore(){
+  $('modalContent').innerHTML=`<h3 style="margin-bottom:14px">مدیریت مخاطب</h3><button onclick="blockContactDemo()" style="width:100%;padding:12px;margin-bottom:8px;border:1px solid #793b45;border-radius:10px;background:#351c24;color:#ff9ca8;cursor:pointer">🚫 مسدود کردن مخاطب</button><button onclick="openHeaderProfile()" style="width:100%;padding:11px;border:1px solid var(--border-color);border-radius:10px;background:transparent;color:white;cursor:pointer">بازگشت به پروفایل</button>`;
+}
+function blockContactDemo(){ alert('مسدودسازی سمت سرور هنوز پیاده‌سازی نشده؛ این دکمه فعلاً اقدامی روی حساب انجام نمی‌دهد.'); }
+function showContactMedia(){ alert('نمایش جداگانهٔ رسانه‌های گفتگو هنوز به API اختصاصی نیاز دارد.'); }
 
 
 function formatLastSeen(value) {
@@ -940,6 +1002,8 @@ async function deleteChat(id) {
 }
 function applyTheme(theme) {
   const root=document.documentElement;
+  const allowed=['dark','telegram','neon','crimson','matrix','amoled'];
+  if (!allowed.includes(theme)) theme='dark';
   const themes={
     dark:['#0b111b','#111c2b','#1b2a3d','#24496d','#43c6ff','#245a83','#172536','#91a8c0','#26364a'],
     telegram:['#0e1621','#17212b','#202b38','#2b5278','#2AABEE','#2b5278','#182533','#8eabbf','#0f151d'],
@@ -948,9 +1012,12 @@ function applyTheme(theme) {
     matrix:['#030906','#09150e','#10271a','#17472c','#49ff8b','#1a6338','#0d2015','#8ebba0','#163522'],
     amoled:['#000000','#050505','#151515','#222222','#39bfff','#202020','#101010','#999999','#242424']
   };
-  const t=themes[theme]||themes.dark;
+  const t=themes[theme];
   ['--bg-main','--panel-bg','--panel-hover','--active-bg','--accent','--bubble-out','--bubble-in','--text-muted','--border-color'].forEach((k,i)=>root.style.setProperty(k,t[i]));
-  localStorage.setItem('pr-theme',theme||'dark');
+  document.body.dataset.theme=theme;
+  /* The original visual skin used fixed gradients, so update the page surface too. */
+  document.body.style.background=t[0];
+  try { localStorage.setItem('pr-theme',theme); } catch(e) {}
 }
 function applyChatBackground(value) {
   const box = $('chatMessages');
