@@ -99,6 +99,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS message_rate_limits(
           user_id INTEGER NOT NULL REFERENCES users(id), bucket INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY(user_id,bucket));
+        CREATE TABLE IF NOT EXISTS stories(
+          id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+          body TEXT NOT NULL DEFAULT '', media_url TEXT DEFAULT '', created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
         """)
         # Backward-compatible migrations for databases created by older versions
         cols={r[1] for r in c.execute("PRAGMA table_info(user_settings)").fetchall()}
@@ -113,6 +116,100 @@ init_db()
 
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+def configured_admin_username():
+    return os.environ.get("ADMIN_USERNAME", "Pv_HE33AM").strip().lstrip("@").lower()
+
+def is_admin_account(user):
+    return bool(user and user["username"].lower() == configured_admin_username())
+
+def admin_session_verified(user):
+    return bool(is_admin_account(user) and session.get("admin_verified_uid") == user["id"])
+
+@app.post("/api/admin/verify")
+@login_required
+def admin_verify():
+    u=current_user()
+    if not is_admin_account(u):
+        return jsonify(error="این حساب، حساب ادمین نیست."),403
+    # Basic session-based throttling against repeated PIN guesses.
+    now_ts=__import__('time').time()
+    if session.get("admin_lock_until", 0) > now_ts:
+        return jsonify(error="تلاش‌های زیاد؛ کمی بعد دوباره امتحان کن."),429
+    data=request.get_json(silent=True) or {}
+    expected=os.environ.get("ADMIN_ACCESS_CODE", "1390")
+    supplied=str(data.get("code", ""))
+    if not hmac.compare_digest(supplied, expected):
+        fails=int(session.get("admin_pin_fails", 0))+1
+        session["admin_pin_fails"]=fails
+        if fails >= 5:
+            session["admin_lock_until"]=now_ts+300
+            session["admin_pin_fails"]=0
+        return jsonify(error="کد ادمین اشتباه است."),403
+    session.pop("admin_pin_fails", None); session.pop("admin_lock_until", None)
+    session["admin_verified_uid"]=u["id"]
+    return jsonify(ok=True, is_admin=True)
+
+@app.get("/api/admin/status")
+@login_required
+def admin_status():
+    u=current_user()
+    return jsonify(is_admin=admin_session_verified(u), is_admin_account=is_admin_account(u), verified=admin_session_verified(u), configured=True)
+
+@app.post("/api/admin/subscription")
+@login_required
+def admin_set_subscription():
+    u=current_user()
+    if not admin_session_verified(u):
+        return jsonify(error="ابتدا با حساب ادمین وارد شو و کد ادمین را تأیید کن."),403
+    data=request.get_json(silent=True) or {}
+    target=str(data.get("username", "")).strip().lstrip("@").lower()
+    action=str(data.get("action", "pro")).lower()
+    user=db().execute("SELECT id,username FROM users WHERE username=?",(target,)).fetchone()
+    if not user: return jsonify(error="این آیدی در پیام‌رسان پیدا نشد."),404
+    if action=="free":
+        db().execute("INSERT INTO user_subscriptions(user_id,plan,status,starts_at,expires_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan='free',status='inactive',expires_at=NULL,updated_at=excluded.updated_at",(user['id'],'free','inactive',None,None,now()))
+        db().commit(); return jsonify(ok=True,username=target,plan="free")
+    start=datetime.now(timezone.utc); expiry=start.replace() + __import__('datetime').timedelta(days=30)
+    db().execute("INSERT INTO user_subscriptions(user_id,plan,status,starts_at,expires_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan='pro',status='active',starts_at=excluded.starts_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at",(user['id'],'pro','active',start.isoformat(timespec='seconds'),expiry.isoformat(timespec='seconds'),now()))
+    db().commit(); return jsonify(ok=True,username=target,plan="pro",expires_at=expiry.isoformat(timespec='seconds'))
+
+@app.get("/api/subscription")
+@login_required
+def subscription_status():
+    u=current_user(); row=db().execute("SELECT plan,status,starts_at,expires_at FROM user_subscriptions WHERE user_id=?",(u['id'],)).fetchone()
+    if not row: return jsonify(plan="free",status="inactive",expires_at=None)
+    data=dict(row)
+    if data.get('expires_at') and data['expires_at'] < now():
+        db().execute("UPDATE user_subscriptions SET plan='free',status='expired',updated_at=? WHERE user_id=?",(now(),u['id'])); db().commit()
+        return jsonify(plan="free",status="expired",expires_at=data['expires_at'])
+    return jsonify(data)
+
+@app.get("/api/stories")
+@login_required
+def get_stories():
+    db().execute("DELETE FROM stories WHERE expires_at<=?",(now(),)); db().commit()
+    rows=db().execute("SELECT s.id,s.user_id,s.body,s.media_url,s.created_at,s.expires_at,u.username,u.display_name,u.avatar FROM stories s JOIN users u ON u.id=s.user_id ORDER BY s.created_at DESC LIMIT 100").fetchall()
+    return jsonify(stories=[dict(r) for r in rows])
+
+@app.post("/api/stories")
+@login_required
+def create_story():
+    u=current_user(); data=request.get_json(silent=True) or {}
+    body=str(data.get('body','')).strip()[:500]
+    media=str(data.get('media_url','')).strip()[:1000]
+    if not body and not media: return jsonify(error="متن استوری یا لینک رسانه را وارد کن."),400
+    if media and not (media.startswith('https://') or media.startswith('http://')): return jsonify(error="لینک رسانه معتبر نیست."),400
+    start=datetime.now(timezone.utc); expiry=start+__import__('datetime').timedelta(hours=24)
+    cur=db().execute("INSERT INTO stories(user_id,body,media_url,created_at,expires_at) VALUES(?,?,?,?,?)",(u['id'],body,media,start.isoformat(timespec='seconds'),expiry.isoformat(timespec='seconds')))
+    db().commit(); return jsonify(ok=True,id=cur.lastrowid,expires_at=expiry.isoformat(timespec='seconds'))
+
+@app.delete("/api/stories/<int:story_id>")
+@login_required
+def delete_story(story_id):
+    u=current_user(); cur=db().execute("DELETE FROM stories WHERE id=? AND user_id=?",(story_id,u['id'])); db().commit()
+    if not cur.rowcount: return jsonify(error="استوری پیدا نشد یا متعلق به شما نیست."),404
+    return jsonify(ok=True)
 
 def current_user():
     uid = session.get("uid")
@@ -253,6 +350,7 @@ def search_users():
     users=[]
     for r in rows:
         item=dict(r)
+        item["is_admin"] = is_admin_account(item)
         setting=db().execute("SELECT show_last_seen FROM user_settings WHERE user_id=?",(item["id"],)).fetchone()
         if setting and not setting["show_last_seen"]:
             item["last_seen"]=None
@@ -509,7 +607,7 @@ def add_group_members(gid):
 def list_contacts():
     me=current_user()
     rows=db().execute("SELECT id,username,display_name,avatar,online,last_seen FROM users WHERE id!=? ORDER BY online DESC,display_name COLLATE NOCASE LIMIT 100",(me["id"],)).fetchall()
-    return jsonify(users=[dict(r) for r in rows])
+    return jsonify(users=[{**dict(r), "is_admin": is_admin_account(r)} for r in rows])
 
 @app.get("/api/messages/search")
 @login_required
@@ -1235,7 +1333,7 @@ img,video,canvas,svg{max-width:100%}
         <div class="pr-quick-actions" style="display:flex;gap:6px;margin-top:7px"><button type="button" onclick="searchMessagesScreen()" style="flex:1;padding:7px 5px;font-size:11px;border-radius:10px;background:#292929;color:#eee;border:1px solid #ffffff12">🔎 پیام‌ها</button><button type="button" onclick="showArchivedChats()" style="flex:1;padding:7px 5px;font-size:11px;border-radius:10px;background:#292929;color:#eee;border:1px solid #ffffff12">📦 بایگانی</button></div>
       </div>
     </div>
-    <div class="pr-top-actions"><button class="pr-pro-shop" type="button" onclick="openPremiumShop()"><span><b>✦ عضویت PRO MAX</b><small>استیکرهای خاص • ظاهر لوکس • قابلیت‌های ویژه</small></span><span class="pr-crown">♛</span></button></div>
+    <div class="pr-top-actions"><button type="button" class="pr-story-launch" onclick="openStories()">⭕ استوری</button><button class="pr-pro-shop" type="button" onclick="openPremiumShop()"><span><b>✦ عضویت PRO MAX</b><small>استیکرهای خاص • ظاهر لوکس • قابلیت‌های ویژه</small></span><span class="pr-crown">♛</span></button></div>
     <div class="chat-list" id="chatList"></div>
   </aside>
 
@@ -1277,7 +1375,10 @@ img,video,canvas,svg{max-width:100%}
   <div class="modal-card" id="modalContent"></div>
 </div>
 
+<style>.pr-admin-badge{display:inline-flex;align-items:center;gap:4px;margin-inline-start:6px;padding:2px 7px;border-radius:999px;background:linear-gradient(135deg,#d6bd8d,#8e7047);color:#17120c;font-size:10px;font-weight:900;vertical-align:middle;white-space:nowrap;box-shadow:0 0 12px #c9a66b33}.pr-admin-badge:before{content:"";position:absolute}</style>
 <script>
+window.PR_ADMIN_TELEGRAM_USERNAME = 'Pv_HE33AM';
+function prAdminBadge(username){return String(username||'').replace(/^@/,'').toLowerCase()==='pv_he33am' ? '<span class="pr-admin-badge" title="مدیر رسمی پیام‌رسان">🛡️ ادمین</span>' : '';}
 function prSetNav(view){document.querySelectorAll('.pr-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view));}
 function prNavigate(view){
  prSetNav(view);
@@ -1290,11 +1391,11 @@ async function openContactsScreen(){
  $('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">YOUR PEOPLE</div><h2>مخاطبین</h2><p>با جست‌وجوی نام یا آیدی، گفتگو را شروع کن.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><input id="prContactsSearch" class="pr-search-field" placeholder="🔎 جست‌وجوی نام یا آیدی..." oninput="searchContactsScreen()" autocomplete="off"><div id="prContactsResults" class="pr-contact-results"><div class="pr-empty-state">برای پیدا کردن افراد، نام یا آیدی را بنویس.</div></div>`;
  $('modalOverlay').classList.remove('hidden');setTimeout(()=>$('prContactsSearch')?.focus(),80);
 }
-async function searchContactsScreen(){const q=$('prContactsSearch')?.value.trim();const box=$('prContactsResults');if(!q){box.innerHTML='<div class="pr-empty-state">برای پیدا کردن افراد، نام یا آیدی را بنویس.</div>';return;}box.innerHTML='<div class="pr-empty-state">در حال جست‌وجو…</div>';try{const d=await api('/api/users?q='+encodeURIComponent(q));box.innerHTML=d.users.length?d.users.map(u=>`<button class="pr-contact-row" onclick="closeModal();openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')"><span class="pr-contact-avatar" style="${u.avatar?`background-image:url('${esc(u.avatar)}')`:''}">${u.avatar?'':esc((u.display_name||'?').slice(0,1))}</span><span class="pr-contact-copy"><b>${esc(u.display_name)}</b><small>@${esc(u.username)} · ${u.online?'آنلاین':'کاربر پیام‌رسان'}</small></span><span class="pr-contact-go">↗</span></button>`).join(''):'<div class="pr-empty-state">کاربری پیدا نشد.</div>';}catch(e){box.innerHTML=`<div class="pr-empty-state">${esc(e.message||'جست‌وجو ناموفق بود')}</div>`;}}
+async function searchContactsScreen(){const q=$('prContactsSearch')?.value.trim();const box=$('prContactsResults');if(!q){box.innerHTML='<div class="pr-empty-state">برای پیدا کردن افراد، نام یا آیدی را بنویس.</div>';return;}box.innerHTML='<div class="pr-empty-state">در حال جست‌وجو…</div>';try{const d=await api('/api/users?q='+encodeURIComponent(q));box.innerHTML=d.users.length?d.users.map(u=>`<button class="pr-contact-row" onclick="closeModal();openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')"><span class="pr-contact-avatar" style="${u.avatar?`background-image:url('${esc(u.avatar)}')`:''}">${u.avatar?'':esc((u.display_name||'?').slice(0,1))}</span><span class="pr-contact-copy"><b>${esc(u.display_name)}${prAdminBadge(u.username)}</b><small>@${esc(u.username)} · ${u.online?'آنلاین':'کاربر پیام‌رسان'}</small></span><span class="pr-contact-go">↗</span></button>`).join(''):'<div class="pr-empty-state">کاربری پیدا نشد.</div>';}catch(e){box.innerHTML=`<div class="pr-empty-state">${esc(e.message||'جست‌وجو ناموفق بود')}</div>`;}}
 const PR_PROFILE_COLORS=['#30251f','#452b3a','#26354f','#173f3a','#56352a','#4a3d70','#5b2630','#3d4148','#6b4c2a','#244a66','#36523b','#171717'];
 function renderProfileColors(selected){return PR_PROFILE_COLORS.map(c=>`<button class="pr-color-swatch ${c.toLowerCase()===String(selected).toLowerCase()?'selected':''}" style="background:${c}" title="${c}" aria-label="انتخاب رنگ ${c}" onclick="saveProfileColor('${c}')"></button>`).join('')}
 async function saveProfileColor(color){try{const d=await api('/api/settings');await api('/api/settings',{method:'POST',body:JSON.stringify({...d,profile_color:color})});const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${color}aa,transparent 58%),linear-gradient(145deg,${color},#111 82%)`;const grid=$('profileColorGrid');if(grid)grid.innerHTML=renderProfileColors(color);showToast('رنگ پس‌زمینهٔ پروفایل ذخیره شد 🎨')}catch(e){showToast(e.message||'ذخیره رنگ انجام نشد')}}
-async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
+async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}${prAdminBadge(u.username)}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button><button onclick="closeModal();openAdminPanel()"><span>🛡️</span>پنل ادمین</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
 
 const meId = {{me['id']}};
 let activeUser = null;
@@ -1354,7 +1455,7 @@ async function loadDialogs() {
       <div class="avatar" style="${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
       <div style="flex:1; min-width:0;">
         <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;">
-          <span>${esc(u.display_name)}</span>
+          <span>${esc(u.display_name)}${prAdminBadge(u.username)}</span>
           <span style="font-size:11px; color:var(--text-muted);">${(u.last_time||'').slice(11,16)}</span>
         </div>
         <div style="font-size:13px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(u.last_msg)}</div>
@@ -1471,9 +1572,19 @@ async function sendPRSticker(emoji,label){
 }
 function openPremiumShop(){
  const isDemo=localStorage.getItem('pr_demo_premium')==='1';
- $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">PAYAMRASAN • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">قیمت‌گذاری</div><p>برای تجربهٔ قابلیت‌های ویژه در یک دورهٔ ماهانه.</p><button class="secondary" onclick="showToast('درگاه پرداخت هنوز متصل نشده؛ قیمت واقعی دریافت نمی‌شود.')">انتخاب ماهانه</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">پیش‌نمایش</div><p>تمام امکانات نمایشی و بسته‌های ظاهری ویژه.</p><button onclick="activateDemoPremium()">${isDemo?'فعال است ✓':'فعال‌سازی نمایشی'}</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">شفافیت: پرداخت واقعی و تأیید سمت سرور هنوز پیاده‌سازی نشده است. دکمهٔ فعال‌سازی فقط برای پیش‌نمایش ظاهر قابلیت‌ها روی همین دستگاه است و پولی دریافت نمی‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
+ $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">PAYAMRASAN • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">۵۰٬۰۰۰ تومان</div><p>اشتراک یک‌ماههٔ PRO؛ درخواست خرید را برای ادمین تلگرام بفرست.</p><button class="secondary" onclick="requestProPurchase()">🛒 درخواست خرید اشتراک</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">۵۰٬۰۰۰ تومان / ماه</div><p>پس از بررسی واریز، ادمین اشتراک را فعال می‌کند.</p><button onclick="requestProPurchase()">👑 خرید PRO MAX</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">پرداخت مستقیم در سایت انجام نمی‌شود. با زدن دکمه، پیام آماده در تلگرام باز می‌شود؛ پس از بررسی پرداخت، ادمین اشتراک را فعال می‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
  $('modalOverlay').classList.remove('hidden');
 }
+async function requestProPurchase(){
+ try{const me=await api('/api/me');const msg=`سلام، درخواست خرید اشتراک PayamRasan Pro دارم.\nآیدی: @${me.username}\nمبلغ: ۵۰٬۰۰۰ تومان\nمدت: یک ماه\nلطفاً اطلاعات پرداخت را ارسال کنید.`;const admin=(window.PR_ADMIN_TELEGRAM_USERNAME||'YOUR_TELEGRAM_USERNAME').replace(/^@/,'');if(!admin||admin==='YOUR_TELEGRAM_USERNAME'){showToast('ابتدا ADMIN_TELEGRAM_USERNAME را در تنظیمات سرور روی آیدی تلگرام خودت تنظیم کن.');return;}window.location.href=`https://t.me/${encodeURIComponent(admin)}?text=${encodeURIComponent(msg)}`;}catch(e){showToast(e.message||'بازکردن درخواست خرید ناموفق بود');}
+}
+async function openStories(){
+ try{const d=await api('/api/stories');const me=await api('/api/me');const list=d.stories.map(s=>`<article class="pr-story-card"><b>${esc(s.display_name||s.username)}</b> <small>@${esc(s.username)} · ${new Date(s.created_at).toLocaleString()}</small>${s.media_url?`<p><a href="${esc(s.media_url)}" target="_blank" rel="noopener">🖼️ مشاهدهٔ رسانه</a></p>`:''}<p style="white-space:pre-wrap">${esc(s.body||'')}</p>${s.user_id===me.id?`<button onclick="deleteStory(${s.id})">🗑️ حذف استوری من</button>`:''}</article>`).join('');$('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">STORIES · 24 HOURS</div><h2>استوری‌ها ✨</h2><p>استوری‌ها پس از ۲۴ ساعت منقضی می‌شوند.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-admin-panel"><textarea id="prStoryText" maxlength="500" placeholder="چی می‌خوای به اشتراک بذاری؟" style="width:100%;box-sizing:border-box;min-height:90px;background:#111;color:#fff;border:1px solid #ffffff20;border-radius:12px;padding:12px"></textarea><input id="prStoryMedia" placeholder="لینک تصویر/ویدئو (اختیاری)" style="width:100%;box-sizing:border-box;padding:11px;background:#111;color:#fff;border:1px solid #ffffff20;border-radius:10px;margin-top:8px"><button onclick="publishStory()" style="margin-top:8px;padding:11px 15px;border:0;border-radius:11px;background:linear-gradient(135deg,#b49a82,#6c5544);color:#fff;font-weight:800">＋ انتشار استوری</button></div><h3>استوری‌های اخیر</h3>${list||'<div class="pr-empty-state">هنوز استوری‌ای منتشر نشده.</div>'}`;$('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری استوری‌ها ناموفق بود')}
+}
+async function publishStory(){try{await api('/api/stories',{method:'POST',body:JSON.stringify({body:$('prStoryText').value.trim(),media_url:$('prStoryMedia').value.trim()})});showToast('استوری تا ۲۴ ساعت نمایش داده می‌شود ✨');openStories()}catch(e){showToast(e.message||'انتشار استوری ناموفق بود')}}
+async function deleteStory(id){if(!await showConfirm('این استوری حذف شود؟','حذف استوری'))return;try{await api('/api/stories/'+id,{method:'DELETE'});showToast('استوری حذف شد');openStories()}catch(e){showToast(e.message||'حذف ناموفق بود')}}
+async function openAdminPanel(){try{const st=await api('/api/admin/status');if(!st.is_admin_account){showToast('این حساب ادمین نیست. با آیدی @Pv_HE33AM وارد شو.');return;}if(!st.verified){const code=await showInput('کد ورود ادمین را وارد کن.','', 'تأیید هویت ادمین 🛡️');if(code===null)return;await api('/api/admin/verify',{method:'POST',body:JSON.stringify({code})});}const verified=await api('/api/admin/status');if(!verified.is_admin){showToast('تأیید هویت ادمین انجام نشد.');return;}$('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">ADMIN CONSOLE · VERIFIED</div><h2>پنل مدیریت 🛡️</h2><p>مدیریت اشتراک کاربران برای ۳۰ روز.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-admin-panel"><label>آیدی کاربر</label><input id="prAdminTarget" placeholder="username بدون @" autocomplete="off"><div style="display:flex;gap:8px;flex-wrap:wrap"><button onclick="adminChangePro('pro')" style="padding:11px;border:0;border-radius:10px;background:#b49a82;color:#111;font-weight:800">👑 تبدیل به PRO</button><button onclick="adminChangePro('free')" style="padding:11px;border:1px solid #ffffff22;border-radius:10px;background:#222;color:#fff">لغو PRO</button></div><small style="display:block;margin-top:10px;color:#aaa;line-height:1.7">دسترسی ادمین فقط برای @Pv_HE33AM پس از تأیید کد فعال می‌شود.</small></div>`;$('modalOverlay').classList.remove('hidden')}catch(e){showToast(e.message||'خطای پنل ادمین')}}
+async function adminChangePro(action){try{const username=$('prAdminTarget').value.trim().replace(/^@/,'');const d=await api('/api/admin/subscription',{method:'POST',body:JSON.stringify({username,action})});showToast(action==='pro'?`@${d.username} به مدت ۳۰ روز PRO شد`:`اشتراک @${d.username} لغو شد`)}catch(e){showToast(e.message||'تغییر اشتراک ناموفق بود')}}
 function activateDemoPremium(){localStorage.setItem('pr_demo_premium','1');showToast('حالت نمایشی PRO فعال شد؛ پرداختی انجام نشده است.');openPremiumShop();}
 
 async function sendMessage(e) {
