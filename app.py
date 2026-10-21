@@ -1280,7 +1280,7 @@ img,video,canvas,svg{max-width:100%}
  .tg-app{padding-bottom:96px!important}.sidebar{padding-bottom:94px!important}.chat-list{padding-bottom:96px!important}.chat-main{padding-bottom:86px!important}.chat-composer{margin-bottom:8px!important}.chat-messages{padding-bottom:24px!important}
  .folder-rail{display:none!important}.sidebar{right:0!important;left:0!important;width:100%!important;max-width:100%!important;border-radius:0!important}.sidebar.mobile-hidden{display:none!important}
  .chat-main{display:none!important}.chat-main.mobile-active{display:flex!important;position:fixed!important;z-index:35!important;inset:0!important;width:100vw!important;height:100dvh!important;padding-bottom:0!important}
- body.pr-profile-view .tg-app{filter:blur(2px);pointer-events:none}
+ body.pr-profile-view .tg-app{pointer-events:none;opacity:.72}
 }
 @media(min-width:769px){.pr-bottom-nav{display:none!important}}
 </style>
@@ -1365,6 +1365,26 @@ img,video,canvas,svg{max-width:100%}
   <div class="modal-card" id="modalContent"></div>
 </div>
 
+<style id="pr-mobile-performance-polish">
+@media(max-width:768px){
+ html{height:100%;height:100dvh;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+ body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+ .chat-main.mobile-active{display:flex!important;flex-direction:column!important;min-height:0!important;padding-bottom:env(safe-area-inset-bottom)!important}
+ .chat-topbar{flex:0 0 auto!important;min-height:62px!important;padding-top:max(8px,env(safe-area-inset-top))!important}
+ .chat-messages{flex:1 1 auto!important;min-height:0!important;overscroll-behavior:contain!important;scroll-behavior:auto!important;padding:14px 11px 18px!important;contain:layout paint style}
+ .message-bubble{max-width:min(84%,420px)!important;border-radius:18px!important;line-height:1.7!important;box-shadow:0 2px 8px #0002!important}
+ .message-bubble img{display:block;height:auto;max-height:42dvh!important;object-fit:contain!important}
+ .chat-composer{flex:0 0 auto!important;width:calc(100% - 16px)!important;margin:7px 8px max(8px,env(safe-area-inset-bottom))!important;padding:7px!important;border-radius:22px!important;background:rgba(22,22,22,.97)!important;box-shadow:0 4px 18px #0004!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+ .composer-input{font-size:16px!important;line-height:1.45!important;min-height:42px!important;max-height:120px!important}
+ .pr-bottom-nav{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 6px 22px #0006!important}
+ .pr-chat-menu{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+ .pr-chat-loading{min-height:38vh;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;align-content:center;color:#a9a9a9;font-size:13px}
+ .pr-chat-loading span{width:7px;height:7px;border-radius:50%;background:#b49a82;animation:prLoadDot 1s infinite ease-in-out}
+ .pr-chat-loading span:nth-child(2){animation-delay:.15s}.pr-chat-loading span:nth-child(3){animation-delay:.3s}.pr-chat-loading small{flex-basis:100%;text-align:center;margin-top:8px;font-size:12px}
+ @keyframes prLoadDot{0%,80%,100%{transform:translateY(0);opacity:.45}40%{transform:translateY(-5px);opacity:1}}
+}
+@media(prefers-reduced-motion:reduce){.pr-chat-loading span{animation:none!important}}
+</style>
 <style>.pr-admin-badge{display:inline-flex;align-items:center;gap:4px;margin-inline-start:6px;padding:2px 7px;border-radius:999px;background:linear-gradient(135deg,#d6bd8d,#8e7047);color:#17120c;font-size:10px;font-weight:900;vertical-align:middle;white-space:nowrap;box-shadow:0 0 12px #c9a66b33}.pr-admin-badge:before{content:"";position:absolute}</style>
 <script>
 window.PR_ADMIN_TELEGRAM_USERNAME = 'Pv_HE33AM';
@@ -1461,14 +1481,20 @@ async function loadGroups() {
   } catch(e) { showToast(e.message); }
 }
 async function openGroupChat(id, title) {
+  const requestId = ++prOpenChatRequest;
   activeGroup = {id, title}; activeUser = null;
   $('chatTitle').textContent = title; $('chatStatus').textContent = 'گروه · پیام‌رسان پرو';
   $('activeAvatar').style.backgroundImage=''; $('activeAvatar').textContent='👥';
-  const d = await api('/api/groups/'+id+'/messages');
-  $('chatMessages').innerHTML=''; seenMessageIds.clear(); d.messages.forEach(m => appendMessage(m, true)); scrollBottom();
+  $('chatMessages').innerHTML = '<div class="pr-chat-loading" role="status"><span></span><span></span><span></span><small>در حال بارگذاری گروه…</small></div>';
   if(window.innerWidth<=768) { $('chatMainPanel').classList.add('mobile-active'); document.body.classList.add('pr-chat-open'); }
+  try {
+    const d = await api('/api/groups/'+id+'/messages');
+    if (requestId !== prOpenChatRequest || !activeGroup || activeGroup.id !== id) return;
+    $('chatMessages').innerHTML=''; seenMessageIds.clear(); (d.messages || []).forEach(m => appendMessage(m, true)); scrollBottom();
+  } catch (e) {
+    if (requestId === prOpenChatRequest) $('chatMessages').innerHTML = '<div class="pr-empty-state">بارگذاری گروه ناموفق بود. دوباره تلاش کن.</div>';
+  }
 }
-
 async function searchUsers() {
   let q = $('searchInput').value.trim();
   if(!q) return loadDialogs();
@@ -1499,27 +1525,48 @@ function updateChatPresence(user) {
   }
 }
 
+let prChatSettingsCache = null;
+let prChatSettingsCachedAt = 0;
+let prOpenChatRequest = 0;
+
 async function openUserChat(id, name, username, avatar) {
+  const requestId = ++prOpenChatRequest;
   activeGroup = null;
   activeUser = {id, name, username, avatar};
-  $('chatTitle').textContent = name;
-  $('chatStatus').textContent = '@' + username;
-  try {
-    const profileData = await api('/api/users?q=' + encodeURIComponent(username));
-    const profile = profileData.users.find(x => x.id === id);
-    if (profile) updateChatPresence(profile);
-  } catch (_) {}
-  if(avatar) $('activeAvatar').style.backgroundImage = `url('${avatar}')`;
-  else { $('activeAvatar').style.backgroundImage = '';$('activeAvatar').textContent = name[0]; }
-  
-  const settings = await api('/api/settings'); applyChatBackground(settings.chat_background||'');
-  let d = await api('/api/messages/' + id);
-  $('chatMessages').innerHTML = '';
+  $('chatTitle').textContent = name || 'گفتگو';
+  $('chatStatus').textContent = username ? '@' + username : 'در حال اتصال…';
+  $('chatMessages').innerHTML = '<div class="pr-chat-loading" role="status"><span></span><span></span><span></span><small>در حال بارگذاری گفتگو…</small></div>';
   seenMessageIds.clear();
-  d.messages.forEach(appendMessage);
-  scrollBottom();
-  if(window.innerWidth <= 768) { $('chatMainPanel').classList.add('mobile-active'); document.body.classList.add('pr-chat-open'); }
-  loadDialogs();
+  if (avatar) $('activeAvatar').style.backgroundImage = `url('${avatar}')`;
+  else { $('activeAvatar').style.backgroundImage = ''; $('activeAvatar').textContent = (name || '?').slice(0,1); }
+  if (window.innerWidth <= 768) {
+    $('chatMainPanel').classList.add('mobile-active');
+    document.body.classList.add('pr-chat-open');
+  }
+
+  // Messages are the critical path; optional profile/settings requests never delay first render.
+  const profilePromise = username ? api('/api/users?q=' + encodeURIComponent(username)).catch(() => null) : Promise.resolve(null);
+  const now = Date.now();
+  const settingsPromise = (prChatSettingsCache && now - prChatSettingsCachedAt < 60000)
+    ? Promise.resolve(prChatSettingsCache)
+    : api('/api/settings').then(v => { prChatSettingsCache = v; prChatSettingsCachedAt = Date.now(); return v; }).catch(() => ({}));
+  try {
+    const d = await api('/api/messages/' + id);
+    if (requestId !== prOpenChatRequest || !activeUser || activeUser.id !== id) return;
+    $('chatMessages').innerHTML = '';
+    seenMessageIds.clear();
+    (d.messages || []).forEach(m => appendMessage(m));
+    scrollBottom();
+    loadDialogs().catch(() => {});
+    Promise.all([profilePromise, settingsPromise]).then(([profileData, settings]) => {
+      if (requestId !== prOpenChatRequest || !activeUser || activeUser.id !== id) return;
+      const profile = profileData?.users?.find(x => x.id === id);
+      if (profile) updateChatPresence(profile);
+      if (settings) applyChatBackground(settings.chat_background || '');
+    }).catch(() => {});
+  } catch (e) {
+    if (requestId === prOpenChatRequest) $('chatMessages').innerHTML = '<div class="pr-empty-state">بارگذاری گفتگو ناموفق بود. اتصال اینترنت را بررسی و دوباره تلاش کن.</div>';
+  }
 }
 
 let typingStopTimer = null;
@@ -2012,6 +2059,25 @@ socket.on('new_message', m => {
 loadDialogs();
 api('/api/settings').then(x => {window.prUserSettings={notifications_enabled:x.notifications_enabled!==0,notification_sound:x.notification_sound!==0,auto_download:!!x.auto_download};applyChatBackground(x.chat_background || ''); applyTheme(x.theme==='light'?'light':'dark'); applyLanguage(getAppLanguage());}).catch(()=>{applyTheme(localStorage.getItem('pr-theme')==='light'?'light':'dark'); applyLanguage(getAppLanguage());});
 </script>
+<style id="pr-final-product-polish">
+:root{color-scheme:dark;--pr-accent:#7dd3fc;--pr-accent-soft:rgba(125,211,252,.12);--pr-line:rgba(255,255,255,.085)}
+button,input,textarea{font-family:inherit}button{touch-action:manipulation}button:focus-visible,[role="button"]:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--pr-accent);outline-offset:2px}
+.chat-row{position:relative;min-height:70px;padding:10px 13px!important;border-bottom:1px solid rgba(255,255,255,.035)!important;transition:background .16s ease,border-color .16s ease}
+.chat-row:hover{background:rgba(255,255,255,.045)!important}.chat-row.active{background:rgba(125,211,252,.09)!important;box-shadow:inset -3px 0 var(--pr-accent)}
+.avatar{flex-shrink:0;overflow:hidden;background-color:#26303b!important;background-size:cover!important;background-position:center!important}
+.chat-topbar{background:rgba(17,19,24,.96)!important;border-bottom:1px solid var(--pr-line)!important}
+.chat-composer{border:1px solid var(--pr-line)!important;background:#17191f!important;box-shadow:0 8px 26px rgba(0,0,0,.18)!important}
+.composer-input{min-width:0!important;resize:none!important}.action-btn,.pr-tool-btn{flex-shrink:0;transition:transform .12s ease,background .12s ease!important}.action-btn:active,.pr-tool-btn:active{transform:scale(.94)}
+.pr-bottom-nav{border-color:rgba(255,255,255,.1)!important;background:#15171c!important;box-shadow:0 8px 28px rgba(0,0,0,.28)!important}
+.pr-nav-item.active{background:var(--pr-accent-soft)!important;color:#d9f3ff!important}.pr-nav-item.active:after{content:"";position:absolute;top:4px;width:18px;height:3px;border-radius:9px;background:var(--pr-accent)}
+.pr-search-field,.search-container input{min-height:44px;border-radius:14px!important}
+.modal-card{border:1px solid var(--pr-line)!important;box-shadow:0 20px 70px rgba(0,0,0,.45)!important}
+.pr-contact-row,.pr-profile-actions button,.pr-setting-row{transition:background .16s ease,border-color .16s ease}
+.pr-contact-row:active,.pr-profile-actions button:active{transform:scale(.99)}img{max-width:100%}
+@media(max-width:768px){.tg-app{height:100dvh!important;min-height:0!important;overflow:hidden!important}.sidebar{height:100dvh!important;overflow:hidden!important}.chat-list{overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important}.chat-main.mobile-active{overflow:hidden!important;overscroll-behavior:none!important}.chat-messages{overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;scrollbar-width:thin!important;contain:layout paint!important}.chat-topbar{padding-left:10px!important;padding-right:10px!important}.chat-composer{gap:5px!important}.composer-input{padding:10px 9px!important}.pr-bottom-nav{height:70px!important;left:10px!important;right:10px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;border-radius:23px!important}.pr-nav-item>span{font-size:24px!important}.pr-nav-item>b{font-size:10px!important}.modal-overlay{padding:12px!important;align-items:flex-end!important}.modal-card{width:100%!important;max-width:560px!important;max-height:min(86dvh,760px)!important;overflow:auto!important;border-radius:24px 24px 18px 18px!important;padding:18px!important}.pr-contact-results{max-height:52dvh!important}}
+@media(min-width:769px){.modal-card{max-height:90vh;overflow:auto}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+</style>
 </body>
 </html>
 """
