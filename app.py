@@ -181,17 +181,6 @@ def admin_set_subscription():
     db().execute("INSERT INTO user_subscriptions(user_id,plan,status,starts_at,expires_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan='pro',status='active',starts_at=excluded.starts_at,expires_at=excluded.expires_at,updated_at=excluded.updated_at",(user['id'],'pro','active',start.isoformat(timespec='seconds'),expiry.isoformat(timespec='seconds'),now()))
     db().commit(); return jsonify(ok=True,username=target,plan="pro",expires_at=expiry.isoformat(timespec='seconds'))
 
-@app.get("/api/subscription")
-@login_required
-def subscription_status():
-    u=current_user(); row=db().execute("SELECT plan,status,starts_at,expires_at FROM user_subscriptions WHERE user_id=?",(u['id'],)).fetchone()
-    if not row: return jsonify(plan="free",status="inactive",expires_at=None)
-    data=dict(row)
-    if data.get('expires_at') and data['expires_at'] < now():
-        db().execute("UPDATE user_subscriptions SET plan='free',status='expired',updated_at=? WHERE user_id=?",(now(),u['id'])); db().commit()
-        return jsonify(plan="free",status="expired",expires_at=data['expires_at'])
-    return jsonify(data)
-
 @app.get("/api/stories")
 @login_required
 def get_stories():
