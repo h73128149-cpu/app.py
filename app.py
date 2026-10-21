@@ -984,8 +984,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 html,body{width:100%;max-width:100%;overflow:hidden}body{overscroll-behavior:none}.tg-app{width:100%;max-width:100%;min-width:0;overflow:hidden;gap:0}.sidebar,.chat-main,.folder-rail{min-width:0}.sidebar-header>*,.chat-topbar>*,.chat-composer>*{min-width:0}.pr-top-actions{flex-wrap:wrap}.pr-pro-shop{max-width:100%;min-width:0}.pr-pro-shop *{overflow-wrap:anywhere}.chat-row,.chat-topbar-info,.message-bubble{overflow-wrap:anywhere}
 @media(max-width:768px){
  .tg-app{display:block!important;padding:0!important;width:100vw!important;height:100dvh!important;overflow:hidden!important}
- .folder-rail{display:none!important}
- .sidebar{display:flex!important;position:absolute!important;inset:0!important;right:0!important;left:0!important;top:0!important;width:100%!important;max-width:100%!important;height:100%!important;height:100dvh!important;transform:none!important;border:0!important;border-radius:0!important;z-index:10!important}
+ .folder-rail{display:flex!important;position:absolute!important;right:0!important;top:0!important;bottom:0!important;width:54px!important;height:100dvh!important;padding:16px 5px!important;gap:13px!important;align-items:center!important;justify-content:flex-start!important;background:linear-gradient(180deg,#111315,#070808)!important;border-left:1px solid #292929!important;z-index:18!important;box-shadow:-8px 0 26px #0005!important}
+ .folder-icon{width:42px!important;height:42px!important;min-width:42px!important;border-radius:15px!important;font-size:20px!important;border:1px solid #ffffff0c!important;background:#171819!important;color:#aeb4b8!important}
+ .folder-icon.active{background:linear-gradient(145deg,#f8f8f8,#aaa)!important;color:#090909!important;box-shadow:0 0 20px #ffffff22!important}
+ .sidebar{display:flex!important;position:absolute!important;inset:0!important;right:54px!important;left:0!important;top:0!important;width:calc(100% - 54px)!important;max-width:calc(100% - 54px)!important;height:100%!important;height:100dvh!important;transform:none!important;border:0!important;border-radius:0!important;z-index:10!important}
  .chat-main{display:flex!important;position:absolute!important;inset:0!important;right:0!important;left:0!important;width:100%!important;max-width:100%!important;height:100%!important;height:100dvh!important;transform:translateX(105%)!important;z-index:30!important;transition:transform .28s cubic-bezier(.2,.8,.2,1)!important}
  .chat-main.mobile-active{transform:translateX(0)!important}
  .sidebar.mobile-hidden{display:none!important}
@@ -1001,7 +1003,7 @@ html,body{width:100%;max-width:100%;overflow:hidden}body{overscroll-behavior:non
  .pr-tool-btn{flex:0 0 35px!important;width:35px!important;height:37px!important}
  .modal-card{width:min(440px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important}
 }
-@media(max-width:380px){.pr-pro-shop small{font-size:9px}.pr-crown{width:31px;height:31px}.chat-composer{gap:2px!important}.pr-tool-btn{flex-basis:32px!important;width:32px!important;font-size:16px!important}.action-btn{font-size:18px!important;padding:3px!important}}
+@media(max-width:380px){.folder-rail{width:48px!important;padding-inline:3px!important}.sidebar{right:48px!important;width:calc(100% - 48px)!important;max-width:calc(100% - 48px)!important}.pr-pro-shop small{font-size:9px}.pr-crown{width:31px;height:31px}.chat-composer{gap:2px!important}.pr-tool-btn{flex-basis:32px!important;width:32px!important;font-size:16px!important}.action-btn{font-size:18px!important;padding:3px!important}}
 @media(prefers-reduced-motion:reduce){.auth-live-badge span,.auth-submit{animation:none!important}}
 /* FINAL POLISH: mobile-first layout, clearer hierarchy, premium controls */
 :root{--pr-glow:0 0 28px #ffffff0b}
@@ -1053,6 +1055,26 @@ img,video,canvas,svg{max-width:100%}
 }
 @media(prefers-reduced-motion:reduce){.pr-pro-shop:after{animation:none!important}}
 </style>
+<style id="pr-reference-mobile-navigation">
+.pr-bottom-nav{display:none}
+@media(max-width:768px){
+ .pr-bottom-nav{position:fixed;z-index:80;left:12px;right:12px;bottom:calc(9px + env(safe-area-inset-bottom));height:76px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:6px;background:rgba(28,28,28,.94);border:1px solid rgba(255,255,255,.08);border-radius:28px;box-shadow:0 12px 45px #0009,inset 0 1px #ffffff0c;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+ .pr-nav-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;border:0;border-radius:22px;background:transparent;color:#b7b7b7;font:inherit;cursor:pointer;transition:background .22s,color .22s,transform .22s}
+ .pr-nav-item>span{font-size:27px;line-height:1.05;font-weight:400}.pr-nav-item>b{font-size:11px;font-weight:650;white-space:nowrap}.pr-nav-item.active{background:#383633;color:#f7eadb;box-shadow:inset 0 1px #ffffff0b}.pr-nav-item:active{transform:scale(.94)}
+ .pr-nav-item i{position:absolute;top:6px;right:calc(50% - 25px);font-size:8px;font-style:normal;color:#e8d1b9;background:#b49a82;border:2px solid #383633;border-radius:20px;min-width:15px;height:15px;display:grid;place-items:center}
+ .pr-nav-item:not([data-view="chats"]) i{display:none}.pr-nav-avatar{width:27px;height:27px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#bfa38a,#665246);color:white!important;font-size:16px!important}
+ .tg-app{padding-bottom:96px!important}.sidebar{padding-bottom:94px!important}.chat-list{padding-bottom:96px!important}.chat-main{padding-bottom:86px!important}.chat-composer{margin-bottom:8px!important}.chat-messages{padding-bottom:24px!important}
+ .folder-rail{display:none!important}.sidebar{right:0!important;left:0!important;width:100%!important;max-width:100%!important;border-radius:0!important}.sidebar.mobile-hidden{display:none!important}
+ .chat-main{display:none!important}.chat-main.mobile-active{display:flex!important;position:fixed!important;z-index:35!important;inset:0!important;width:100vw!important;height:100dvh!important;padding-bottom:0!important}
+ body.pr-profile-view .tg-app{filter:blur(2px);pointer-events:none}
+}
+@media(min-width:769px){.pr-bottom-nav{display:none!important}}
+</style>
+
+<style id="pr-screen-design-system">
+.pr-screen-head,.pr-profile-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.pr-eyebrow{font-size:10px;letter-spacing:2px;color:#b8a18c;font-weight:800}.pr-screen-head h2{font-size:25px;margin:5px 0}.pr-screen-head p{color:#999;font-size:12px;line-height:1.8;margin:0 0 14px}.pr-close-round{width:34px;height:34px;border:1px solid #ffffff18;border-radius:50%;background:#ffffff09;color:#eee;font-size:22px;cursor:pointer}.pr-search-field{width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid #ffffff13;border-radius:17px;background:#ffffff08;color:#fff;outline:none;font:inherit}.pr-search-field:focus{border-color:#b49a82;box-shadow:0 0 0 3px #b49a821c}.pr-contact-results{display:flex;flex-direction:column;gap:5px;max-height:min(55vh,480px);overflow:auto;margin-top:12px}.pr-contact-row{display:flex;align-items:center;gap:12px;width:100%;padding:11px;border:1px solid transparent;border-radius:16px;background:#ffffff05;color:#eee;text-align:right;cursor:pointer}.pr-contact-row:hover{background:#ffffff0b;border-color:#ffffff10}.pr-contact-avatar{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border-radius:50%;background-color:#66564a;background-size:cover;background-position:center;font-size:20px}.pr-contact-copy{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}.pr-contact-copy b{font-size:14px}.pr-contact-copy small{font-size:11px;color:#999}.pr-contact-go{font-size:20px;color:#b49a82}.pr-empty-state{text-align:center;color:#999;padding:25px 10px;font-size:13px;line-height:1.9}.pr-profile-hero{margin:-5px -5px 14px;padding:20px 17px 17px;border-radius:22px;background:radial-gradient(circle at 50% 0,#a47b5238,transparent 50%),linear-gradient(145deg,#30251f,#151515 75%);text-align:center;border:1px solid #ffffff0d}.pr-profile-top{text-align:right}.pr-profile-avatar{width:108px;height:108px;margin:14px auto 12px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c4a58a,#5b4638);border:4px solid #ffffff17;box-shadow:0 10px 35px #0007;font-size:42px}.pr-profile-hero h2{font-family:Georgia,serif;font-size:29px;margin:0 0 5px}.pr-profile-handle{font-size:13px;color:#a9a9a9}.pr-online-pill{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 11px;border-radius:99px;background:#ffffff0b;color:#d2c2b2;font-size:11px}.pr-online-pill i{width:6px;height:6px;border-radius:50%;background:#68d391}.pr-profile-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:20px}.pr-profile-actions button{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 5px;border:1px solid #ffffff0b;border-radius:15px;background:#ffffff08;color:#eee;font:inherit;font-size:11px;cursor:pointer}.pr-profile-actions button span{font-size:22px}.pr-profile-details{display:flex;flex-direction:column;gap:0}.pr-profile-details>div{padding:13px 5px;border-bottom:1px solid #ffffff0d;display:flex;flex-direction:column;gap:6px}.pr-profile-details small{color:#888;font-size:11px}.pr-profile-details b{font-weight:500;font-size:14px;overflow-wrap:anywhere}.pr-logout-btn{width:100%;padding:13px;margin-top:14px;border:1px solid #8d34342c;border-radius:14px;background:#8d343414;color:#e9a0a0;font:inherit;cursor:pointer}
+</style>
+
 <div class="tg-app">
   <div class="folder-rail">
     <div class="folder-icon active" onclick="switchFolder('all')">💬</div>
@@ -1104,11 +1126,33 @@ img,video,canvas,svg{max-width:100%}
   </main>
 </div>
 
+<nav class="pr-bottom-nav" aria-label="ناوبری اصلی">
+  <button type="button" class="pr-nav-item active" data-view="chats" onclick="prNavigate('chats')"><span>☏</span><b>گفتگوها</b><i id="prUnreadBadge">●</i></button>
+  <button type="button" class="pr-nav-item" data-view="contacts" onclick="prNavigate('contacts')"><span>◎</span><b>مخاطبین</b></button>
+  <button type="button" class="pr-nav-item" data-view="settings" onclick="prNavigate('settings')"><span>⚙</span><b>تنظیمات</b></button>
+  <button type="button" class="pr-nav-item" data-view="profile" onclick="prNavigate('profile')"><span class="pr-nav-avatar">✦</span><b>پروفایل</b></button>
+</nav>
+
 <div id="modalOverlay" class="modal-overlay hidden" onclick="if(event.target===this) closeModal()">
   <div class="modal-card" id="modalContent"></div>
 </div>
 
 <script>
+function prSetNav(view){document.querySelectorAll('.pr-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view));}
+function prNavigate(view){
+ prSetNav(view);
+ if(view==='chats'){document.body.classList.remove('pr-profile-view');$('chatMainPanel').classList.remove('mobile-active');$('sidebarPanel').classList.remove('mobile-hidden');loadDialogs();return;}
+ if(view==='settings'){openAppSettings();return;}
+ if(view==='profile'){openProfileScreen();return;}
+ if(view==='contacts'){openContactsScreen();return;}
+}
+async function openContactsScreen(){
+ $('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">YOUR PEOPLE</div><h2>مخاطبین</h2><p>با جست‌وجوی نام یا آیدی، گفتگو را شروع کن.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><input id="prContactsSearch" class="pr-search-field" placeholder="🔎 جست‌وجوی نام یا آیدی..." oninput="searchContactsScreen()" autocomplete="off"><div id="prContactsResults" class="pr-contact-results"><div class="pr-empty-state">برای پیدا کردن افراد، نام یا آیدی را بنویس.</div></div>`;
+ $('modalOverlay').classList.remove('hidden');setTimeout(()=>$('prContactsSearch')?.focus(),80);
+}
+async function searchContactsScreen(){const q=$('prContactsSearch')?.value.trim();const box=$('prContactsResults');if(!q){box.innerHTML='<div class="pr-empty-state">برای پیدا کردن افراد، نام یا آیدی را بنویس.</div>';return;}box.innerHTML='<div class="pr-empty-state">در حال جست‌وجو…</div>';try{const d=await api('/api/users?q='+encodeURIComponent(q));box.innerHTML=d.users.length?d.users.map(u=>`<button class="pr-contact-row" onclick="closeModal();openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')"><span class="pr-contact-avatar" style="${u.avatar?`background-image:url('${esc(u.avatar)}')`:''}">${u.avatar?'':esc((u.display_name||'?').slice(0,1))}</span><span class="pr-contact-copy"><b>${esc(u.display_name)}</b><small>@${esc(u.username)} · ${u.online?'آنلاین':'کاربر پیام‌رسان'}</small></span><span class="pr-contact-go">↗</span></button>`).join(''):'<div class="pr-empty-state">کاربری پیدا نشد.</div>';}catch(e){box.innerHTML=`<div class="pr-empty-state">${esc(e.message||'جست‌وجو ناموفق بود')}</div>`;}}
+async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button></div></div><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;$('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
+
 const meId = {{me['id']}};
 let activeUser = null;
 let activeGroup = null;
