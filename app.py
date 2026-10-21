@@ -70,7 +70,7 @@ def init_db():
           PRIMARY KEY(user_id, other_id));
         CREATE TABLE IF NOT EXISTS user_settings(
           user_id INTEGER PRIMARY KEY REFERENCES users(id), chat_background TEXT DEFAULT '',
-          show_last_seen INTEGER DEFAULT 1, theme TEXT DEFAULT 'dark', profile_color TEXT DEFAULT '#30251f', notifications_enabled INTEGER DEFAULT 1, auto_download INTEGER DEFAULT 0);
+          show_last_seen INTEGER DEFAULT 1, theme TEXT DEFAULT 'dark', profile_color TEXT DEFAULT '#30251f', notifications_enabled INTEGER DEFAULT 1, auto_download INTEGER DEFAULT 0, notification_sound INTEGER DEFAULT 1);
         CREATE TABLE IF NOT EXISTS device_accounts(
           device_token TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id),
           created_at TEXT NOT NULL, PRIMARY KEY(device_token,user_id));
@@ -102,7 +102,7 @@ def init_db():
         """)
         # Backward-compatible migrations for databases created by older versions
         cols={r[1] for r in c.execute("PRAGMA table_info(user_settings)").fetchall()}
-        for name, ddl in [("profile_color", "TEXT DEFAULT '#30251f'"), ("notifications_enabled", "INTEGER DEFAULT 1"), ("auto_download", "INTEGER DEFAULT 0")]:
+        for name, ddl in [("profile_color", "TEXT DEFAULT '#30251f'"), ("notifications_enabled", "INTEGER DEFAULT 1"), ("auto_download", "INTEGER DEFAULT 0"), ("notification_sound", "INTEGER DEFAULT 1")]:
             if name not in cols: c.execute(f"ALTER TABLE user_settings ADD COLUMN {name} {ddl}")
         # Ensure settings exist for existing accounts
         c.execute("INSERT OR IGNORE INTO user_settings(user_id) SELECT id FROM users")
@@ -411,8 +411,9 @@ def save_settings():
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", profile_color): profile_color="#30251f"
     notifications=1 if data.get("notifications_enabled", True) else 0
     auto_download=1 if data.get("auto_download", False) else 0
-    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=?,theme=?,profile_color=?,notifications_enabled=?,auto_download=? WHERE user_id=?",
-                 (bg,1 if data.get("show_last_seen") else 0,theme,profile_color,notifications,auto_download,u["id"]))
+    notification_sound=1 if data.get("notification_sound", True) else 0
+    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=?,theme=?,profile_color=?,notifications_enabled=?,auto_download=?,notification_sound=? WHERE user_id=?",
+                 (bg,1 if data.get("show_last_seen") else 0,theme,profile_color,notifications,auto_download,notification_sound,u["id"]))
     db().commit()
     return jsonify(ok=True)
 
@@ -1545,6 +1546,7 @@ async function openAppSettings() {
     <div class="pr-settings-section"><h4>🔔 اعلان‌ها و دانلود</h4>
       <label class="pr-setting-row"><span>فعال‌بودن اعلان‌های داخل برنامه</span><input id="settingNotifications" type="checkbox" ${d.notifications_enabled!==0?'checked':''}></label>
       <label class="pr-setting-row"><span>دانلود خودکار رسانه‌ها</span><input id="settingAutoDownload" type="checkbox" ${d.auto_download?'checked':''}></label>
+      <label class="pr-setting-row"><span>صدای اعلان پیام جدید</span><input id="settingNotificationSound" type="checkbox" ${d.notification_sound!==0?'checked':''}></label>
       <small style="color:var(--text-muted);line-height:1.8">دانلود خودکار در این نسخه فقط ترجیح کاربر را ذخیره می‌کند؛ دانلود رسانه‌ها همچنان تابع نوع فایل و رفتار مرورگر است.</small>
     </div>
     <button onclick="saveAppSettings()" style="padding:12px 16px;background:linear-gradient(135deg,var(--accent),#b49a82);border:1px solid var(--border-color);color:var(--button-text,white);border-radius:13px;box-shadow:0 8px 22px #0003;transition:transform .2s,filter .2s">${en?'Save settings':'ذخیره تنظیمات ✓'}</button>
@@ -1552,7 +1554,7 @@ async function openAppSettings() {
   $('modalOverlay').classList.remove('hidden');
 }
 async function saveAppSettings() {
-  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value,notifications_enabled:$('settingNotifications')?.checked??true,auto_download:$('settingAutoDownload')?.checked??false,profile_color:(await api('/api/settings')).profile_color||'#30251f'})}); applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); showToast(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
+  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value,notifications_enabled:$('settingNotifications')?.checked??true,auto_download:$('settingAutoDownload')?.checked??false,notification_sound:$('settingNotificationSound')?.checked??true,profile_color:(await api('/api/settings')).profile_color||'#30251f'})}); window.prUserSettings={notifications_enabled:$('settingNotifications')?.checked??true,notification_sound:$('settingNotificationSound')?.checked??true,auto_download:$('settingAutoDownload')?.checked??false}; applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); showToast(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
   catch(e){ showToast(e.message); }
 }
 
@@ -1850,10 +1852,12 @@ document.addEventListener('keydown', ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key.to
 if ('Notification' in window && Notification.permission === 'default') {
   // Permission is requested only after the user explicitly interacts with the page.
   document.addEventListener('click', function askNotificationPermission() {
-    if (Notification.permission === 'default') Notification.requestPermission();
+    if (window.prUserSettings?.notifications_enabled !== false && Notification.permission === 'default') Notification.requestPermission();
     document.removeEventListener('click', askNotificationPermission);
   }, {once:true});
 }
+window.prUserSettings = {notifications_enabled:true, notification_sound:true, auto_download:false};
+function playPRNotificationTone(){try{if(window.prUserSettings?.notification_sound===false)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C(),o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=740;g.gain.setValueAtTime(0.0001,c.currentTime);g.gain.exponentialRampToValueAtTime(0.045,c.currentTime+0.015);g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.16);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+0.17);o.onended=()=>c.close();}catch(_){}}
 const socket = io();
 let typingResetTimer = null;
 socket.on('typing_status', data => {
@@ -1891,7 +1895,8 @@ socket.on('new_message', m => {
     scrollBottom();
   }
   if (m.receiver_id === meId && m.sender_id !== meId) {
-    if ('Notification' in window && Notification.permission === 'granted' &&
+    if (window.prUserSettings?.notifications_enabled !== false) playPRNotificationTone();
+    if (window.prUserSettings?.notifications_enabled !== false && 'Notification' in window && Notification.permission === 'granted' &&
         (document.hidden || !belongsToOpenChat)) {
       new Notification('پیام جدید از ' + (m.sender_name || 'یک کاربر'), {
         body: m.msg_type === 'image' ? 'یک فایل برای شما فرستاده شد' : (m.body || 'پیام جدید'),
@@ -1904,7 +1909,7 @@ socket.on('new_message', m => {
 });
 
 loadDialogs();
-api('/api/settings').then(x => {applyChatBackground(x.chat_background || ''); applyTheme(x.theme==='light'?'light':'dark'); applyLanguage(getAppLanguage());}).catch(()=>{applyTheme(localStorage.getItem('pr-theme')==='light'?'light':'dark'); applyLanguage(getAppLanguage());});
+api('/api/settings').then(x => {window.prUserSettings={notifications_enabled:x.notifications_enabled!==0,notification_sound:x.notification_sound!==0,auto_download:!!x.auto_download};applyChatBackground(x.chat_background || ''); applyTheme(x.theme==='light'?'light':'dark'); applyLanguage(getAppLanguage());}).catch(()=>{applyTheme(localStorage.getItem('pr-theme')==='light'?'light':'dark'); applyLanguage(getAppLanguage());});
 </script>
 </body>
 </html>
