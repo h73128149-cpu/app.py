@@ -70,7 +70,7 @@ def init_db():
           PRIMARY KEY(user_id, other_id));
         CREATE TABLE IF NOT EXISTS user_settings(
           user_id INTEGER PRIMARY KEY REFERENCES users(id), chat_background TEXT DEFAULT '',
-          show_last_seen INTEGER DEFAULT 1, theme TEXT DEFAULT 'dark');
+          show_last_seen INTEGER DEFAULT 1, theme TEXT DEFAULT 'dark', profile_color TEXT DEFAULT '#30251f', notifications_enabled INTEGER DEFAULT 1, auto_download INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS device_accounts(
           device_token TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id),
           created_at TEXT NOT NULL, PRIMARY KEY(device_token,user_id));
@@ -90,6 +90,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS archived_chats(
           user_id INTEGER NOT NULL REFERENCES users(id), other_id INTEGER NOT NULL REFERENCES users(id),
           archived_at TEXT NOT NULL, PRIMARY KEY(user_id,other_id));
+        CREATE TABLE IF NOT EXISTS pinned_chats(
+          user_id INTEGER NOT NULL REFERENCES users(id), other_id INTEGER NOT NULL REFERENCES users(id),
+          pinned_at TEXT NOT NULL, PRIMARY KEY(user_id,other_id));
         CREATE TABLE IF NOT EXISTS user_subscriptions(
           user_id INTEGER PRIMARY KEY REFERENCES users(id), plan TEXT NOT NULL DEFAULT 'free',
           status TEXT NOT NULL DEFAULT 'inactive', starts_at TEXT, expires_at TEXT, updated_at TEXT NOT NULL);
@@ -97,6 +100,10 @@ def init_db():
           user_id INTEGER NOT NULL REFERENCES users(id), bucket INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY(user_id,bucket));
         """)
+        # Backward-compatible migrations for databases created by older versions
+        cols={r[1] for r in c.execute("PRAGMA table_info(user_settings)").fetchall()}
+        for name, ddl in [("profile_color", "TEXT DEFAULT '#30251f'"), ("notifications_enabled", "INTEGER DEFAULT 1"), ("auto_download", "INTEGER DEFAULT 0")]:
+            if name not in cols: c.execute(f"ALTER TABLE user_settings ADD COLUMN {name} {ddl}")
         # Ensure settings exist for existing accounts
         c.execute("INSERT OR IGNORE INTO user_settings(user_id) SELECT id FROM users")
 
@@ -211,7 +218,8 @@ def get_dialogs():
     me=current_user()
     rows=db().execute("""
         SELECT u.id, u.username, u.display_name, u.avatar, u.online, u.last_seen,
-               m.body as last_msg, m.created_at as last_time, m.read_at, m.sender_id
+               m.body as last_msg, m.created_at as last_time, m.read_at, m.sender_id,
+               EXISTS(SELECT 1 FROM pinned_chats pc WHERE pc.user_id=? AND pc.other_id=u.id) AS chat_pinned
         FROM users u
         JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.receiver_id = u.id AND m.sender_id = ?)
         WHERE NOT EXISTS (SELECT 1 FROM hidden_chats h WHERE h.user_id=? AND h.other_id=u.id)
@@ -221,8 +229,8 @@ def get_dialogs():
             WHERE sender_id = ? OR receiver_id = ?
             GROUP BY CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END
         )
-        ORDER BY m.id DESC
-    """, (me["id"], me["id"], me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
+        ORDER BY EXISTS(SELECT 1 FROM pinned_chats pc WHERE pc.user_id=? AND pc.other_id=u.id) DESC, m.id DESC
+    """, (me["id"], me["id"], me["id"], me["id"], me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
     
     dialogs = [dict(r) for r in rows]
     # Ensure Saved Messages is always present
@@ -399,8 +407,12 @@ def save_settings():
     db().execute("INSERT OR IGNORE INTO user_settings(user_id) VALUES(?)",(u["id"],))
     theme=str(data.get("theme","dark"))[:24]
     if theme not in {"dark","light"}: theme="dark"
-    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=?,theme=? WHERE user_id=?",
-                 (bg,1 if data.get("show_last_seen") else 0,theme,u["id"]))
+    profile_color=str(data.get("profile_color", "#30251f"))[:20]
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", profile_color): profile_color="#30251f"
+    notifications=1 if data.get("notifications_enabled", True) else 0
+    auto_download=1 if data.get("auto_download", False) else 0
+    db().execute("UPDATE user_settings SET chat_background=?,show_last_seen=?,theme=?,profile_color=?,notifications_enabled=?,auto_download=? WHERE user_id=?",
+                 (bg,1 if data.get("show_last_seen") else 0,theme,profile_color,notifications,auto_download,u["id"]))
     db().commit()
     return jsonify(ok=True)
 
@@ -558,6 +570,17 @@ def archive_chat(other_id):
 def unarchive_chat(other_id):
     me=current_user(); db().execute("DELETE FROM archived_chats WHERE user_id=? AND other_id=?",(me["id"],other_id)); db().commit()
     return jsonify(ok=True)
+
+@app.post("/api/chats/<int:other_id>/pin")
+@login_required
+def pin_chat(other_id):
+    me=current_user()
+    if other_id == me["id"]: return jsonify(error="گفتگوی پیام‌های ذخیره‌شده قابل سنجاق است اما این عملیات فعلاً پشتیبانی نمی‌شود"),400
+    if not db().execute("SELECT id FROM users WHERE id=?",(other_id,)).fetchone(): return jsonify(error="کاربر پیدا نشد"),404
+    exists=db().execute("SELECT 1 FROM pinned_chats WHERE user_id=? AND other_id=?",(me["id"],other_id)).fetchone()
+    if exists: db().execute("DELETE FROM pinned_chats WHERE user_id=? AND other_id=?",(me["id"],other_id)); pinned=False
+    else: db().execute("INSERT OR IGNORE INTO pinned_chats(user_id,other_id,pinned_at) VALUES(?,?,?)",(me["id"],other_id,now())); pinned=True
+    db().commit(); return jsonify(ok=True,pinned=pinned)
 
 @app.get("/api/subscription")
 @login_required
@@ -1175,6 +1198,19 @@ img,video,canvas,svg{max-width:100%}
 
 <style id="pr-screen-design-system">
 .pr-screen-head,.pr-profile-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.pr-eyebrow{font-size:10px;letter-spacing:2px;color:#b8a18c;font-weight:800}.pr-screen-head h2{font-size:25px;margin:5px 0}.pr-screen-head p{color:#999;font-size:12px;line-height:1.8;margin:0 0 14px}.pr-close-round{width:34px;height:34px;border:1px solid #ffffff18;border-radius:50%;background:#ffffff09;color:#eee;font-size:22px;cursor:pointer}.pr-search-field{width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid #ffffff13;border-radius:17px;background:#ffffff08;color:#fff;outline:none;font:inherit}.pr-search-field:focus{border-color:#b49a82;box-shadow:0 0 0 3px #b49a821c}.pr-contact-results{display:flex;flex-direction:column;gap:5px;max-height:min(55vh,480px);overflow:auto;margin-top:12px}.pr-contact-row{display:flex;align-items:center;gap:12px;width:100%;padding:11px;border:1px solid transparent;border-radius:16px;background:#ffffff05;color:#eee;text-align:right;cursor:pointer}.pr-contact-row:hover{background:#ffffff0b;border-color:#ffffff10}.pr-contact-avatar{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border-radius:50%;background-color:#66564a;background-size:cover;background-position:center;font-size:20px}.pr-contact-copy{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}.pr-contact-copy b{font-size:14px}.pr-contact-copy small{font-size:11px;color:#999}.pr-contact-go{font-size:20px;color:#b49a82}.pr-empty-state{text-align:center;color:#999;padding:25px 10px;font-size:13px;line-height:1.9}.pr-profile-hero{margin:-5px -5px 14px;padding:20px 17px 17px;border-radius:22px;background:radial-gradient(circle at 50% 0,#a47b5238,transparent 50%),linear-gradient(145deg,#30251f,#151515 75%);text-align:center;border:1px solid #ffffff0d}.pr-profile-top{text-align:right}.pr-profile-avatar{width:108px;height:108px;margin:14px auto 12px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#c4a58a,#5b4638);border:4px solid #ffffff17;box-shadow:0 10px 35px #0007;font-size:42px}.pr-profile-hero h2{font-family:Georgia,serif;font-size:29px;margin:0 0 5px}.pr-profile-handle{font-size:13px;color:#a9a9a9}.pr-online-pill{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 11px;border-radius:99px;background:#ffffff0b;color:#d2c2b2;font-size:11px}.pr-online-pill i{width:6px;height:6px;border-radius:50%;background:#68d391}.pr-profile-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:20px}.pr-profile-actions button{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 5px;border:1px solid #ffffff0b;border-radius:15px;background:#ffffff08;color:#eee;font:inherit;font-size:11px;cursor:pointer}.pr-profile-actions button span{font-size:22px}.pr-profile-details{display:flex;flex-direction:column;gap:0}.pr-profile-details>div{padding:13px 5px;border-bottom:1px solid #ffffff0d;display:flex;flex-direction:column;gap:6px}.pr-profile-details small{color:#888;font-size:11px}.pr-profile-details b{font-weight:500;font-size:14px;overflow-wrap:anywhere}.pr-logout-btn{width:100%;padding:13px;margin-top:14px;border:1px solid #8d34342c;border-radius:14px;background:#8d343414;color:#e9a0a0;font:inherit;cursor:pointer}
+.pr-profile-hero{transition:background .35s ease,transform .25s;animation:prProfileIn .42s cubic-bezier(.2,.8,.2,1)}
+@keyframes prProfileIn{from{opacity:0;transform:translateY(9px) scale(.985)}to{opacity:1;transform:none}}
+.pr-profile-avatar{transition:background .25s,transform .25s,box-shadow .25s}.pr-profile-avatar:active{transform:scale(.96)}
+.pr-color-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:14px 0 18px}
+.pr-color-swatch{height:36px;border-radius:12px;border:2px solid #ffffff25;box-shadow:inset 0 1px #ffffff30,0 4px 12px #0003;cursor:pointer;transition:transform .18s,box-shadow .18s;position:relative}
+.pr-color-swatch:hover{transform:translateY(-3px) scale(1.04)}.pr-color-swatch.selected{outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 5px #ffffff12}
+.pr-chat-menu{position:fixed;z-index:100001;min-width:220px;padding:7px;border:1px solid #ffffff18;border-radius:18px;background:rgba(24,24,24,.97);box-shadow:0 18px 60px #000a;backdrop-filter:blur(22px);animation:prMenuIn .16s ease-out}
+@keyframes prMenuIn{from{opacity:0;transform:translateY(7px) scale(.97)}to{opacity:1;transform:none}}
+.pr-chat-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:12px;border:0;border-radius:12px;background:transparent;color:#eee;font:inherit;text-align:right;cursor:pointer;transition:background .16s,transform .16s}
+.pr-chat-menu button:hover{background:#ffffff10;transform:translateX(-2px)}.pr-chat-menu button.danger{color:#ff9b9b}
+.pr-settings-section{margin:14px 0;padding:14px;border:1px solid var(--border-color);border-radius:16px;background:var(--panel-bg)}.pr-settings-section h4{margin:0 0 12px;font-size:14px}.pr-setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;color:var(--text-main,white);font-size:13px}.pr-setting-row+.pr-setting-row{border-top:1px solid var(--border-color)}.pr-setting-row input[type=checkbox]{accent-color:#b49a82;width:19px;height:19px}
+.chat-row.pr-pinned:after{content:'📌';position:absolute;left:12px;bottom:8px;font-size:11px;opacity:.85}
+
 </style>
 
 <div class="tg-app">
@@ -1254,7 +1290,10 @@ async function openContactsScreen(){
  $('modalOverlay').classList.remove('hidden');setTimeout(()=>$('prContactsSearch')?.focus(),80);
 }
 async function searchContactsScreen(){const q=$('prContactsSearch')?.value.trim();const box=$('prContactsResults');if(!q){box.innerHTML='<div class="pr-empty-state">برای پیدا کردن افراد، نام یا آیدی را بنویس.</div>';return;}box.innerHTML='<div class="pr-empty-state">در حال جست‌وجو…</div>';try{const d=await api('/api/users?q='+encodeURIComponent(q));box.innerHTML=d.users.length?d.users.map(u=>`<button class="pr-contact-row" onclick="closeModal();openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')"><span class="pr-contact-avatar" style="${u.avatar?`background-image:url('${esc(u.avatar)}')`:''}">${u.avatar?'':esc((u.display_name||'?').slice(0,1))}</span><span class="pr-contact-copy"><b>${esc(u.display_name)}</b><small>@${esc(u.username)} · ${u.online?'آنلاین':'کاربر پیام‌رسان'}</small></span><span class="pr-contact-go">↗</span></button>`).join(''):'<div class="pr-empty-state">کاربری پیدا نشد.</div>';}catch(e){box.innerHTML=`<div class="pr-empty-state">${esc(e.message||'جست‌وجو ناموفق بود')}</div>`;}}
-async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button></div></div><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;$('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
+const PR_PROFILE_COLORS=['#30251f','#452b3a','#26354f','#173f3a','#56352a','#4a3d70','#5b2630','#3d4148','#6b4c2a','#244a66','#36523b','#171717'];
+function renderProfileColors(selected){return PR_PROFILE_COLORS.map(c=>`<button class="pr-color-swatch ${c.toLowerCase()===String(selected).toLowerCase()?'selected':''}" style="background:${c}" title="${c}" aria-label="انتخاب رنگ ${c}" onclick="saveProfileColor('${c}')"></button>`).join('')}
+async function saveProfileColor(color){try{const d=await api('/api/settings');await api('/api/settings',{method:'POST',body:JSON.stringify({...d,profile_color:color})});const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${color}aa,transparent 58%),linear-gradient(145deg,${color},#111 82%)`;const grid=$('profileColorGrid');if(grid)grid.innerHTML=renderProfileColors(color);showToast('رنگ پس‌زمینهٔ پروفایل ذخیره شد 🎨')}catch(e){showToast(e.message||'ذخیره رنگ انجام نشد')}}
+async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
 
 const meId = {{me['id']}};
 let activeUser = null;
@@ -1300,11 +1339,17 @@ async function api(url, opts={}) {
   return d;
 }
 
+let prChatLongPressTimer=null;let prChatMenuNode=null;
+function cancelChatLongPress(){if(prChatLongPressTimer){clearTimeout(prChatLongPressTimer);prChatLongPressTimer=null}}
+function startChatLongPress(ev,id,name,pinned){cancelChatLongPress();const t=ev.touches?.[0];const x=t?.clientX??innerWidth/2,y=t?.clientY??innerHeight/2;prChatLongPressTimer=setTimeout(()=>showChatMenu({clientX:x,clientY:y,preventDefault(){}},id,name,pinned),520)}
+function closeChatMenu(){prChatMenuNode?.remove();prChatMenuNode=null;document.removeEventListener('click',closeChatMenu)}
+function showChatMenu(ev,id,name,pinned){ev.preventDefault?.();closeChatMenu();const menu=document.createElement('div');menu.className='pr-chat-menu';menu.innerHTML=`<div style="padding:9px 12px 10px;color:#b49a82;font-size:12px;font-weight:800">${esc(name)}</div><button onclick="chatMenuAction('pin',${id})">📌 ${pinned?'برداشتن سنجاق':'سنجاق‌کردن گفتگو'}</button><button onclick="chatMenuAction('archive',${id})">🗃️ بایگانی گفتگو</button><button onclick="chatMenuAction('delete',${id})" class="danger">🗑️ حذف از فهرست</button>`;document.body.appendChild(menu);const x=Math.min(Math.max(8,ev.clientX||innerWidth/2),innerWidth-235),y=Math.min(Math.max(8,ev.clientY||innerHeight/2),innerHeight-190);menu.style.left=x+'px';menu.style.top=y+'px';prChatMenuNode=menu;setTimeout(()=>document.addEventListener('click',closeChatMenu,{once:true}),0)}
+async function chatMenuAction(action,id){closeChatMenu();try{if(action==='pin'){const r=await api(`/api/chats/${id}/pin`,{method:'POST'});showToast(r.pinned?'گفتگو سنجاق شد 📌':'سنجاق گفتگو برداشته شد');await loadDialogs()}else if(action==='archive'){if(!(await showConfirm('این گفتگو به بایگانی منتقل شود؟','بایگانی گفتگو')))return;await api(`/api/chats/${id}/archive`,{method:'POST'});if(activeUser?.id===id){activeUser=null;$('chatMessages').innerHTML=''}showToast('گفتگو بایگانی شد');await loadDialogs()}else if(action==='delete'){if(!(await showConfirm('گفتگو فقط از فهرست شما حذف شود؟ پیام‌های طرف مقابل پاک نمی‌شوند.','حذف گفتگو')))return;await api(`/api/chats/${id}`,{method:'DELETE'});if(activeUser?.id===id){activeUser=null;$('chatMessages').innerHTML=''}showToast('گفتگو از فهرست حذف شد');await loadDialogs()}}catch(e){showToast(e.message||'عملیات انجام نشد')}}
 async function loadDialogs() {
   activeGroup = null;
   let d = await api('/api/dialogs');
   $('chatList').innerHTML = d.dialogs.map(u => `
-    <div class="chat-row ${activeUser?.id===u.id?'active':''}" onclick="openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')">
+    <div class="chat-row ${activeUser?.id===u.id?'active':''} ${u.chat_pinned?'pr-pinned':''}" data-chat-id="${u.id}" onclick="openUserChat(${u.id},'${esc(u.display_name)}','${esc(u.username)}','${esc(u.avatar||'')}')" oncontextmenu="event.preventDefault();showChatMenu(event,${u.id},'${esc(u.display_name)}',${!!u.chat_pinned})" ontouchstart="startChatLongPress(event,${u.id},'${esc(u.display_name)}',${!!u.chat_pinned})" ontouchend="cancelChatLongPress()" ontouchmove="cancelChatLongPress()">
       <div class="avatar" style="${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.display_name[0]}</div>
       <div style="flex:1; min-width:0;">
         <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;">
@@ -1497,12 +1542,17 @@ async function openAppSettings() {
     <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> ${en?'Allow others to see my last seen':'اجازه نمایش آخرین بازدید من'}</label>
     <label style="display:block;margin:12px 0 6px">${en?'Color theme':'تم رنگی'}</label><select id="settingTheme" onchange="applyTheme(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:var(--text-main,white);border:1px solid var(--border-color);border-radius:9px"><option value="dark" ${d.theme!=='light'?'selected':''}>⚫ ${en?'Black':'سیاه'}</option><option value="light" ${d.theme==='light'?'selected':''}>⚪ ${en?'White':'سفید'}</option></select>
     <div style="font-size:12px;color:var(--text-muted);margin:10px 0 16px">${en?'Only black and white themes are available for now.':'فعلاً فقط تم‌های سیاه و سفید فعال هستند.'}</div>
-    <button onclick="saveAppSettings()" style="padding:11px;background:var(--accent);border:1px solid var(--border-color);color:var(--button-text,white);border-radius:10px">${en?'Save settings':'ذخیره تنظیمات'}</button>
+    <div class="pr-settings-section"><h4>🔔 اعلان‌ها و دانلود</h4>
+      <label class="pr-setting-row"><span>فعال‌بودن اعلان‌های داخل برنامه</span><input id="settingNotifications" type="checkbox" ${d.notifications_enabled!==0?'checked':''}></label>
+      <label class="pr-setting-row"><span>دانلود خودکار رسانه‌ها</span><input id="settingAutoDownload" type="checkbox" ${d.auto_download?'checked':''}></label>
+      <small style="color:var(--text-muted);line-height:1.8">دانلود خودکار در این نسخه فقط ترجیح کاربر را ذخیره می‌کند؛ دانلود رسانه‌ها همچنان تابع نوع فایل و رفتار مرورگر است.</small>
+    </div>
+    <button onclick="saveAppSettings()" style="padding:12px 16px;background:linear-gradient(135deg,var(--accent),#b49a82);border:1px solid var(--border-color);color:var(--button-text,white);border-radius:13px;box-shadow:0 8px 22px #0003;transition:transform .2s,filter .2s">${en?'Save settings':'ذخیره تنظیمات ✓'}</button>
     <button onclick="closeModal()" style="padding:11px;background:var(--panel-hover);border:1px solid var(--border-color);color:var(--text-main,white);border-radius:10px;margin-right:6px">${en?'Close':'بستن'}</button>`;
   $('modalOverlay').classList.remove('hidden');
 }
 async function saveAppSettings() {
-  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value})}); applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); showToast(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
+  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value,notifications_enabled:$('settingNotifications')?.checked??true,auto_download:$('settingAutoDownload')?.checked??false,profile_color:(await api('/api/settings')).profile_color||'#30251f'})}); applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); showToast(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
   catch(e){ showToast(e.message); }
 }
 
