@@ -91,6 +91,10 @@ def init_db():
         # Ensure settings exist for existing accounts
         c.execute("INSERT OR IGNORE INTO user_settings(user_id) SELECT id FROM users")
 
+# WSGI hosts (for example gunicorn app:app) import this module without running __main__.
+# Initialize tables during import so the first request does not fail with "no such table".
+init_db()
+
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -851,10 +855,114 @@ body[data-theme="light"] .search-container,body[data-theme="light"] .composer-in
 .pr-perks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.pr-perk{padding:12px;border:1px solid #292929;border-radius:13px;background:#101010}.pr-perk b{display:block;font-size:12px;margin:7px 0 4px}.pr-perk span{font-size:10px;color:#999;line-height:1.7}
 .pr-picker-tabs{display:flex;gap:7px;margin:12px 0}.pr-picker-tabs button{flex:1;border:1px solid #333;background:#111;color:#eee;padding:9px;border-radius:11px;cursor:pointer}.pr-picker-tabs button.active{background:#eee;color:#111}
 .pr-emoji-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}.pr-emoji-grid button{background:#151515;border:1px solid #292929;border-radius:10px;padding:7px 0;font-size:23px;cursor:pointer}.pr-sticker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pr-sticker{min-height:92px;background:linear-gradient(145deg,#202020,#101010);border:1px solid #343434;border-radius:15px;color:white;font-size:34px;cursor:pointer}.pr-sticker small{display:block;font-size:10px;color:#aaa;margin-top:4px}
+.pr-message-sticker{font-size:64px;line-height:1.2;padding:8px 12px;min-width:88px;min-height:82px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 20%,#ffffff12,transparent 55%),linear-gradient(145deg,#1e1e1e,#0c0c0c);border:1px solid #ffffff16;border-radius:20px;filter:drop-shadow(0 8px 18px #0005)}
 .pr-badge{display:inline-block;border:1px solid #555;border-radius:999px;padding:4px 8px;font-size:10px;color:#ddd}
 @keyframes prShine{0%,100%{box-shadow:0 0 0 #fff0}50%{box-shadow:0 0 24px #fff2}}
 .pr-pro-shop{animation:prShine 4s ease-in-out infinite}
 @media(max-width:520px){.pr-plan-grid{grid-template-columns:1fr}.pr-emoji-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.pr-premium-hero h2{font-size:24px}}
+
+
+
+/* ═══════════ PAYAMRASAN: CINEMATIC ULTRA VISUAL EXPERIENCE ═══════════ */
+:root{
+ --pr-white:#f8f8f8;--pr-silver:#bfc3c7;--pr-line:rgba(255,255,255,.105);
+ --pr-glass:rgba(17,17,17,.82);--pr-glow:rgba(255,255,255,.12);
+}
+html{background:#050505}
+body{position:relative;isolation:isolate;background:#050505!important}
+body:before{content:"";position:fixed;inset:-25%;z-index:-2;pointer-events:none;background:
+ radial-gradient(ellipse at 18% 18%,rgba(255,255,255,.085),transparent 27%),
+ radial-gradient(ellipse at 82% 75%,rgba(180,180,180,.065),transparent 29%),
+ radial-gradient(ellipse at 52% 110%,rgba(255,255,255,.045),transparent 35%),#050505;
+ animation:prAmbient 18s ease-in-out infinite alternate;transform:translateZ(0)}
+body:after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse at center,#000 10%,transparent 82%)}
+.tg-app{gap:0;padding:9px;overflow:hidden;background:transparent;animation:prAppEnter .65s cubic-bezier(.2,.8,.2,1) both}
+.folder-rail{margin:0 5px 0 0;border:1px solid var(--pr-line)!important;border-radius:23px;background:linear-gradient(180deg,rgba(25,25,25,.92),rgba(7,7,7,.96))!important;box-shadow:0 18px 55px #0008,inset 0 1px #ffffff0d;backdrop-filter:blur(24px);padding-top:18px;gap:13px}
+.folder-icon{position:relative;border:1px solid transparent;transition:transform .28s cubic-bezier(.2,.8,.2,1),background .28s,color .28s,box-shadow .28s;overflow:hidden}
+.folder-icon:before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,#ffffff20,transparent 60%);opacity:0;transition:opacity .25s}
+.folder-icon:hover{transform:translateY(-3px) scale(1.055);background:#242424!important;color:#fff!important;border-color:#ffffff20;box-shadow:0 8px 22px #0008}
+.folder-icon:hover:before,.folder-icon.active:before{opacity:1}
+.folder-icon.active{background:linear-gradient(145deg,#f4f4f4,#a7a7a7)!important;color:#080808!important;border-color:#fff;box-shadow:0 5px 25px #ffffff22,inset 0 1px #fff}
+.sidebar{position:relative;overflow:hidden;margin:0 5px;border:1px solid var(--pr-line)!important;border-radius:24px;background:linear-gradient(160deg,rgba(21,21,21,.97),rgba(8,8,8,.96))!important;box-shadow:0 22px 65px #0008,inset 0 1px #ffffff0b;backdrop-filter:blur(26px)}
+.sidebar:after{content:"";position:absolute;left:-65px;top:-100px;width:210px;height:210px;border-radius:50%;background:#fff;filter:blur(100px);opacity:.045;pointer-events:none}
+.sidebar>div:first-child{position:relative!important;background:linear-gradient(120deg,#202020,#0b0b0b)!important;border-bottom:1px solid #ffffff10!important;padding:17px!important}
+.sidebar>div:first-child>div:first-child>div:first-child{background:linear-gradient(145deg,#fff,#9a9a9a)!important;color:#080808;box-shadow:0 0 0 5px #ffffff08,0 9px 30px #fff2!important;animation:prLogoFloat 5s ease-in-out infinite}
+.sidebar>div:first-child span{color:#fff!important}
+.sidebar>div:first-child button{background:#151515!important;color:#eee!important;border-color:#444!important;transition:all .22s}
+.sidebar>div:first-child button:hover{background:#fff!important;color:#080808!important;transform:translateY(-2px)}
+.sidebar-header{background:transparent!important;border-color:#ffffff0e!important;padding:14px!important}
+.search-container{height:43px!important;border:1px solid #ffffff12!important;border-radius:15px!important;background:#080808!important;transition:all .25s;box-shadow:inset 0 1px #ffffff06}
+.search-container:focus-within{border-color:#888!important;box-shadow:0 0 0 4px #ffffff08,0 8px 24px #0005;transform:translateY(-1px)}
+.pr-top-actions{background:transparent!important;border-color:#ffffff0a!important;padding:2px 13px 14px!important}
+.pr-pro-shop{position:relative;isolation:isolate;overflow:hidden;border:1px solid #555!important;border-radius:17px!important;background:linear-gradient(115deg,#292929,#111 55%,#1c1c1c)!important;box-shadow:0 10px 32px #0008,inset 0 1px #ffffff16!important;transition:transform .28s,box-shadow .28s,border-color .28s!important}
+.pr-pro-shop:before{content:"";position:absolute;inset:-60% auto -60% -35%;width:30%;transform:rotate(20deg);background:linear-gradient(90deg,transparent,#ffffff20,transparent);animation:prSweep 5s ease-in-out infinite;z-index:-1}
+.pr-pro-shop:hover{transform:translateY(-3px) scale(1.012)!important;border-color:#aaa!important;box-shadow:0 16px 36px #000b,0 0 28px #ffffff0c!important}
+.pr-crown{background:linear-gradient(145deg,#fff,#a3a3a3)!important;box-shadow:0 0 0 4px #ffffff08,0 0 30px #ffffff18!important;animation:prCrownPulse 3s ease-in-out infinite}
+.chat-list{padding:4px 5px 12px;scrollbar-width:thin;scrollbar-color:#484848 transparent}
+.chat-row{position:relative;isolation:isolate;overflow:hidden;margin:4px 5px!important;padding:12px 12px!important;border:1px solid transparent!important;border-radius:16px!important;animation:prRowIn .38s both;transition:transform .24s,background .24s,border-color .24s,box-shadow .24s!important}
+.chat-row:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,#ffffff0b,transparent 58%);opacity:0;transition:opacity .25s}
+.chat-row:hover{transform:translateX(-4px) scale(1.008)!important;background:#1b1b1b!important;border-color:#ffffff12!important;box-shadow:0 8px 24px #0005}
+.chat-row:hover:before{opacity:1}
+.chat-row.active{background:linear-gradient(105deg,#292929,#141414)!important;border-color:#555!important;box-shadow:inset -3px 0 #fff,0 8px 25px #0005!important}
+.avatar{position:relative;overflow:hidden;border:1px solid #ffffff22!important;background:linear-gradient(145deg,#555,#171717)!important;box-shadow:0 5px 18px #0008,inset 0 1px #ffffff18!important;transition:transform .28s,box-shadow .28s!important}
+.chat-row:hover .avatar{transform:rotate(-5deg) scale(1.06);box-shadow:0 0 0 4px #ffffff08,0 8px 24px #0009!important}
+.chat-main{position:relative;overflow:hidden;border:1px solid var(--pr-line)!important;border-radius:24px!important;background:rgba(7,7,7,.91)!important;box-shadow:0 22px 70px #0009,inset 0 1px #ffffff08;backdrop-filter:blur(24px)}
+.chat-main:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.24;background:radial-gradient(ellipse at 50% 0%,#ffffff12,transparent 45%),linear-gradient(135deg,transparent 35%,#ffffff03 50%,transparent 65%);background-size:auto,220% 220%;animation:prSurfaceDrift 20s ease infinite}
+.chat-main>*{position:relative;z-index:1}
+.chat-topbar{height:74px!important;padding:12px 19px!important;background:linear-gradient(110deg,rgba(22,22,22,.97),rgba(9,9,9,.96))!important;border-bottom:1px solid #ffffff12!important;box-shadow:0 8px 30px #0004}
+.chat-topbar-info{border-radius:15px;padding:3px;transition:transform .22s,opacity .22s}
+.chat-topbar-info:hover{transform:translateX(-2px);opacity:1!important}
+#chatTitle{letter-spacing:-.3px}
+#chatStatus{color:#999!important}
+.chat-messages{position:relative;background:transparent!important;background-image:radial-gradient(ellipse at 50% 45%,#ffffff07,transparent 63%)!important;scrollbar-width:thin;scrollbar-color:#444 transparent}
+.message-bubble{position:relative;overflow:hidden;padding:12px 15px!important;border:1px solid #ffffff14!important;border-radius:19px!important;box-shadow:0 10px 28px #0005,inset 0 1px #ffffff09!important;backdrop-filter:blur(12px);transition:transform .2s,box-shadow .2s;animation:prMessageIn .38s cubic-bezier(.2,.8,.2,1) both!important}
+.message-bubble:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,#ffffff08,transparent 42%);opacity:.7}
+.message-bubble:hover{transform:translateY(-2px);box-shadow:0 14px 34px #0007,inset 0 1px #ffffff0d!important}
+.message-bubble.mine{background:linear-gradient(145deg,#303030,#191919)!important;border-bottom-right-radius:6px!important}
+.message-bubble:not(.mine){background:linear-gradient(145deg,#1b1b1b,#101010)!important;border-bottom-left-radius:6px!important}
+.chat-composer{position:relative;gap:9px!important;margin:11px!important;padding:10px!important;border:1px solid #ffffff17!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(25,25,25,.97),rgba(9,9,9,.98))!important;box-shadow:0 15px 40px #0008,inset 0 1px #ffffff0a!important;transition:border-color .25s,box-shadow .25s}
+.chat-composer:focus-within{border-color:#777!important;box-shadow:0 0 0 4px #ffffff08,0 18px 50px #000b,inset 0 1px #ffffff12!important}
+.composer-input{min-height:42px!important;max-height:150px!important;padding:11px 13px!important;border-radius:15px!important;background:#080808!important;border:1px solid #ffffff10!important;color:#fff!important;transition:border-color .2s,background .2s!important}
+.composer-input::placeholder{color:#777!important}
+.pr-tool-btn,.action-btn{position:relative;overflow:hidden;background:linear-gradient(145deg,#1c1c1c,#0d0d0d)!important;border:1px solid #ffffff15!important;color:#eee!important;box-shadow:inset 0 1px #ffffff08;transition:transform .22s,background .22s,border-color .22s,box-shadow .22s!important}
+.pr-tool-btn:after,.action-btn:after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,#ffffff12,transparent 65%);opacity:0;transition:opacity .2s}
+.pr-tool-btn:hover,.action-btn:hover{transform:translateY(-3px) scale(1.035)!important;background:#292929!important;border-color:#777!important;box-shadow:0 9px 23px #0008,0 0 20px #ffffff08!important}
+.pr-tool-btn:hover:after,.action-btn:hover:after{opacity:1}
+.chat-composer button[type="submit"]{background:linear-gradient(145deg,#fff,#bdbdbd)!important;color:#050505!important;border-color:#fff!important;box-shadow:0 6px 22px #ffffff15!important}
+.chat-composer button[type="submit"]:hover{box-shadow:0 8px 30px #ffffff2b!important}
+.modal-overlay{background:rgba(0,0,0,.76)!important;backdrop-filter:blur(18px) saturate(.6)!important;animation:prFade .2s ease both}
+.modal-card{position:relative;overflow:hidden;background:linear-gradient(145deg,#1b1b1b,#080808)!important;border:1px solid #ffffff22!important;border-radius:26px!important;box-shadow:0 35px 110px #000e,inset 0 1px #ffffff10!important;animation:prModalIn .35s cubic-bezier(.2,.8,.2,1) both!important}
+.modal-card:before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,#fff7,transparent);pointer-events:none}
+.system-notice{background:linear-gradient(145deg,#1c1c1c,#080808)!important;border-color:#ffffff20!important;box-shadow:0 28px 80px #000b,inset 0 1px #ffffff0c!important}
+.pr-premium-hero{background:radial-gradient(ellipse at 90% 0%,#ffffff24,transparent 42%),linear-gradient(135deg,#242424,#080808 75%)!important;border-color:#666!important;box-shadow:0 18px 50px #0007,inset 0 1px #ffffff14}
+.pr-premium-hero:after{animation:prHeroFloat 7s ease-in-out infinite}
+.pr-plan{transition:transform .25s,border-color .25s,box-shadow .25s!important}
+.pr-plan:hover{transform:translateY(-5px);border-color:#888!important;box-shadow:0 16px 35px #0009,0 0 25px #ffffff07!important}
+.pr-plan.featured{background:linear-gradient(145deg,#242424,#0b0b0b)!important;border-color:#aaa!important}
+.pr-perk{transition:transform .22s,border-color .22s,background .22s}
+.pr-perk:hover{transform:translateY(-3px);border-color:#777;background:#171717}
+.pr-emoji-grid button,.pr-sticker{transition:transform .2s,background .2s,border-color .2s,box-shadow .2s!important}
+.pr-emoji-grid button:hover,.pr-sticker:hover{transform:translateY(-4px) scale(1.07)!important;background:#303030!important;border-color:#888!important;box-shadow:0 10px 25px #0008,0 0 20px #ffffff08!important}
+.pr-message-sticker{animation:prStickerPop .42s cubic-bezier(.16,1,.3,1) both;box-shadow:0 15px 35px #0007,inset 0 1px #ffffff12!important}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #aaa!important;outline-offset:3px}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#383838;border-radius:99px;border:2px solid transparent;background-clip:padding-box}::-webkit-scrollbar-thumb:hover{background:#666;background-clip:padding-box}
+@keyframes prAmbient{0%{transform:translate3d(-1.5%,0,0) scale(1)}100%{transform:translate3d(1.5%,-1%,0) scale(1.04)}}
+@keyframes prAppEnter{from{opacity:0;transform:translateY(12px) scale(.99);filter:blur(5px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes prLogoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-3px) rotate(2deg)}}
+@keyframes prSweep{0%,62%,100%{left:-45%;opacity:0}68%{opacity:1}86%{left:125%;opacity:0}}
+@keyframes prCrownPulse{0%,100%{box-shadow:0 0 0 4px #ffffff08,0 0 18px #ffffff10}50%{box-shadow:0 0 0 5px #ffffff0c,0 0 32px #ffffff25}}
+@keyframes prRowIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes prMessageIn{from{opacity:0;transform:translateY(10px) scale(.985);filter:blur(2px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes prSurfaceDrift{0%,100%{background-position:center,0% 50%}50%{background-position:center,100% 50%}}
+@keyframes prModalIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes prFade{from{opacity:0}to{opacity:1}}
+@keyframes prHeroFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-12px) rotate(3deg)}}
+@keyframes prStickerPop{0%{opacity:0;transform:scale(.55) rotate(-8deg)}70%{opacity:1;transform:scale(1.08) rotate(2deg)}100%{transform:scale(1) rotate(0)}}
+@media(max-width:768px){
+ .tg-app{padding:0!important;gap:0!important}.folder-rail{margin:0!important;border-radius:0 0 0 0!important;border-top:0!important;border-bottom:0!important}.sidebar{margin:0!important;border-radius:0!important;border-top:0!important;border-bottom:0!important}.chat-main{border-radius:0!important;border:0!important}.chat-topbar{height:68px!important;padding:10px 12px!important}.chat-composer{margin:7px!important;padding:8px!important;border-radius:18px!important}.message-bubble{max-width:88%!important}.sidebar>div:first-child{padding:13px!important}
+}
+@media(max-width:420px){.folder-rail{width:48px!important;padding-inline:3px!important}.folder-icon{width:38px;height:38px;font-size:18px}.sidebar{width:min(292px,calc(100vw - 48px))!important}.pr-tool-btn{width:34px!important;height:37px!important;font-size:17px!important}.chat-composer{gap:5px!important}.composer-input{font-size:13px!important}}
+@media(prefers-reduced-motion:reduce){body:before,.sidebar>div:first-child>div:first-child>div:first-child,.pr-pro-shop:before,.pr-crown,.chat-row,.message-bubble,.pr-message-sticker,.modal-card{animation:none!important}*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 
 </style>
 </head>
@@ -1071,7 +1179,18 @@ function openEmojiPicker(tab='emoji'){
 }
 function switchPRPicker(tab){$('prEmojiTab').classList.toggle('active',tab==='emoji');$('prStickerTab').classList.toggle('active',tab==='sticker');$('prPickerBody').innerHTML=tab==='emoji'?window.prEmojiHtml():window.prStickerHtml();}
 function insertPRToken(token){const input=$('messageInput');if(!input)return;const start=input.selectionStart??input.value.length;const end=input.selectionEnd??start;input.value=input.value.slice(0,start)+token+input.value.slice(end);input.focus();input.selectionStart=input.selectionEnd=start+token.length;closeModal();}
-async function sendPRSticker(emoji,label){if(!activeUser&&!activeGroup){showToast('اول یک گفتگو انتخاب کن.');return;}closeModal();$('messageInput').value=emoji+' '+label;await sendMessage();}
+async function sendPRSticker(emoji,label){
+ if(!activeUser&&!activeGroup){showToast('اول یک گفتگو انتخاب کن.');return;}
+ closeModal();
+ try {
+   const payload={body:emoji,msg_type:'sticker'};
+   const d=activeGroup
+     ? await api('/api/groups/'+activeGroup.id+'/messages',{method:'POST',body:JSON.stringify(payload)})
+     : await api('/api/messages',{method:'POST',body:JSON.stringify({...payload,receiver_id:activeUser.id})});
+   appendMessage(d.message,!!activeGroup); scrollBottom();
+   if(!activeGroup) loadDialogs();
+ } catch(e) { showToast(e.message||'ارسال استیکر انجام نشد'); }
+}
 function openPremiumShop(){
  const isDemo=localStorage.getItem('pr_demo_premium')==='1';
  $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">PAYAMRASAN • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">قیمت‌گذاری</div><p>برای تجربهٔ قابلیت‌های ویژه در یک دورهٔ ماهانه.</p><button class="secondary" onclick="showToast('درگاه پرداخت هنوز متصل نشده؛ قیمت واقعی دریافت نمی‌شود.')">انتخاب ماهانه</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">پیش‌نمایش</div><p>تمام امکانات نمایشی و بسته‌های ظاهری ویژه.</p><button onclick="activateDemoPremium()">${isDemo?'فعال است ✓':'فعال‌سازی نمایشی'}</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">شفافیت: پرداخت واقعی و تأیید سمت سرور هنوز پیاده‌سازی نشده است. دکمهٔ فعال‌سازی فقط برای پیش‌نمایش ظاهر قابلیت‌ها روی همین دستگاه است و پولی دریافت نمی‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
@@ -1402,7 +1521,8 @@ function appendMessage(m, isGroup=false) {
   el.className = `message-bubble ${isMine?'mine':''}`;
   let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
   let bodyHtml = esc(m.body);
-  if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; max-height:360px; border-radius:10px; object-fit:contain;">`;
+  if(m.msg_type === 'sticker') bodyHtml = `<div class="pr-message-sticker" role="img" aria-label="استیکر">${esc(m.body)}</div>`;
+  else if(m.msg_type === 'image') bodyHtml = `<img src="${esc(m.body)}" style="max-width:100%; max-height:360px; border-radius:10px; object-fit:contain;">`;
   else if(m.msg_type === 'voice') bodyHtml = `<div style="min-width:220px"><div>🎙️ پیام صوتی</div><audio controls preload="metadata" src="${esc(m.body)}" style="width:100%;max-width:280px"></audio></div>`;
   else if(m.msg_type === 'file') bodyHtml = `<a href="${esc(m.body)}" target="_blank" rel="noopener" style="color:#7dd3fc">📎 دریافت فایل</a>`;
   let actions = (!isGroup && isMine) ? `<div style="display:flex;gap:8px;margin-top:6px"><button onclick="editMessage(${m.id},${JSON.stringify(m.body||'')})" style="background:none;border:0;color:#bae6fd;cursor:pointer">ویرایش</button><button onclick="deleteMessage(${m.id})" style="background:none;border:0;color:#fca5a5;cursor:pointer">حذف</button></div>` : '';
@@ -1475,5 +1595,4 @@ api('/api/settings').then(x => {applyChatBackground(x.chat_background || ''); ap
 """
 
 if __name__ == "__main__":
-    init_db()
     socketio.run(app, host=os.environ.get("HOST","0.0.0.0"), port=int(os.environ.get("PORT","5000")), debug=False, allow_unsafe_werkzeug=True)
