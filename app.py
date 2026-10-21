@@ -23,6 +23,13 @@ app.config["SESSION_COOKIE_SECURE"] = os.environ.get("COOKIE_SECURE", "0") == "1
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 ALLOWED_EXT = {"png","jpg","jpeg","gif","webp","pdf","txt","zip","mp3","wav","ogg","m4a","mp4","webm","docx","xlsx"}
 
+def login_required(fn):
+    @wraps(fn)
+    def wrapped(*a, **kw):
+        if not current_user(): return redirect(url_for("login"))
+        return fn(*a, **kw)
+    return wrapped
+
 @app.after_request
 def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -214,13 +221,6 @@ def delete_story(story_id):
 def current_user():
     uid = session.get("uid")
     return db().execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone() if uid else None
-
-def login_required(fn):
-    @wraps(fn)
-    def wrapped(*a, **kw):
-        if not current_user(): return redirect(url_for("login"))
-        return fn(*a, **kw)
-    return wrapped
 
 def valid_username(u):
     return bool(re.fullmatch(r"[A-Za-z0-9_]{3,24}", u or ""))
@@ -809,10 +809,10 @@ body[data-theme="light"] input, body[data-theme="light"] textarea, body[data-the
 <style id="pr-premium-auth">
 :root{color-scheme:dark}
 body{position:relative;isolation:isolate;background:#050505!important;overflow-x:hidden;padding:24px}
-body:before{content:"";position:fixed;inset:0;z-index:-2;background:radial-gradient(ellipse at 18% 15%,#ffffff15,transparent 35%),radial-gradient(ellipse at 85% 85%,#ffffff10,transparent 34%),linear-gradient(135deg,#050505,#101010 48%,#030303)}
-body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-events:none;background-image:linear-gradient(#ffffff09 1px,transparent 1px),linear-gradient(90deg,#ffffff09 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,black,transparent 88%)}
-.auth-card{position:relative;width:min(460px,100%);padding:clamp(28px,5vw,46px);text-align:right;border-radius:28px;background:linear-gradient(145deg,#171717ed,#090909f5)!important;border:1px solid #ffffff20;box-shadow:0 35px 100px #000b,0 0 0 7px #ffffff04,inset 0 1px #ffffff12;backdrop-filter:blur(22px);overflow:hidden;animation:prAuthIn .55s cubic-bezier(.2,.8,.2,1) both}
-.auth-card:before{content:"PR";display:grid;place-items:center;width:66px;height:66px;margin:0 0 24px auto;border-radius:22px;background:linear-gradient(145deg,#fff,#bdbdbd);color:#080808;font-size:25px;font-weight:1000;letter-spacing:-2px;box-shadow:0 12px 35px #ffffff18;transform:rotate(-5deg)}
+body:before{content:"";position:fixed;inset:0;z-index:-2;linear-gradient(145deg,#080808,#111 55%,#080808)}
+body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-events:none;background-image:none}
+.auth-card{position:relative;width:min(460px,100%);padding:clamp(28px,5vw,46px);text-align:right;border-radius:20px;background:#141414!important;border:1px solid #292929;box-shadow:0 18px 48px #0008;backdrop-filter:none;overflow:hidden;animation:prAuthIn .28s ease-out both}
+.auth-card:before{content:"PR";display:grid;place-items:center;width:66px;height:66px;margin:0 0 24px auto;border-radius:22px;background:#e7e7e7;color:#080808;font-size:25px;font-weight:900;letter-spacing:-1px;box-shadow:none;transform:none}
 .auth-card:after{content:"PRIVATE • FAST • CONNECTED";display:block;margin-top:28px;padding-top:18px;border-top:1px solid #ffffff13;color:#777;font-size:10px;letter-spacing:2px;text-align:center;direction:ltr}
 .auth-card h2{font-size:clamp(23px,4vw,30px)!important;line-height:1.5;margin-bottom:7px!important;color:#fff;letter-spacing:-.7px}
 .auth-card h2:after{content:"ارتباطی ساده، تجربه‌ای حرفه‌ای";display:block;margin-top:7px;color:#888;font-size:12px;font-weight:400;letter-spacing:0}
@@ -820,7 +820,7 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-even
 .auth-card input{height:54px;padding:0 17px;margin-bottom:13px;border:1px solid #ffffff17;border-radius:15px;background:#050505!important;color:#fff;transition:border .2s,box-shadow .2s,transform .2s}
 .auth-card input::placeholder{color:#777}
 .auth-card input:focus{border-color:#e5e5e5;box-shadow:0 0 0 4px #ffffff0b;transform:translateY(-1px)}
-.auth-card button{height:54px;margin-top:5px;border-radius:15px;background:linear-gradient(135deg,#fff,#cfcfcf)!important;color:#050505!important;font-size:15px;font-weight:900;box-shadow:0 12px 28px #ffffff12;transition:transform .18s,filter .18s}
+.auth-card button{height:54px;margin-top:5px;border-radius:15px;background:#e5e5e5!important;color:#050505!important;font-size:15px;font-weight:750;box-shadow:none;transition:background .18s}
 .auth-card button:hover{transform:translateY(-2px);filter:brightness(1.08)}
 .auth-card a{display:inline-flex;margin-top:3px;color:#eee!important;font-size:13px;text-decoration:underline;text-decoration-color:#555;text-underline-offset:5px}
 .error{border:1px solid #ffffff20;background:#ffffff0c!important;color:#fff!important;border-radius:13px}
@@ -830,7 +830,7 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-even
 .auth-live-badge span{width:7px;height:7px;border-radius:50%;background:#f5f5f5;box-shadow:0 0 13px #fff;animation:authPulse 1.8s infinite}
 .auth-lead{color:#929292;font-size:13px;line-height:1.9;margin-top:4px}
 .auth-password-wrap{position:relative}.auth-password-wrap input{padding-left:76px!important}.auth-password-wrap .auth-eye{position:absolute;left:8px;top:5px;width:auto;height:42px!important;margin:0;padding:0 11px;background:#1b1b1b!important;border:1px solid #333!important;color:#ddd!important;font-size:11px;box-shadow:none!important}
-.auth-card .auth-submit{display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(110deg,#fff,#aaa 45%,#f8f8f8)!important;background-size:200% 100%!important;animation:authShine 5s linear infinite;color:#050505!important}
+.auth-card .auth-submit{display:flex;align-items:center;justify-content:center;gap:12px;background:#e5e5e5!important;animation:none;color:#050505!important}
 .auth-switch{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:20px;font-size:12px;color:#888}.auth-switch a{margin:0!important;text-decoration:none!important;color:#fff!important;font-weight:800}
 .auth-benefits{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:25px}.auth-benefits span{font-size:10px;color:#8b8b8b;padding:7px 9px;border:1px solid #ffffff10;border-radius:99px;background:#ffffff04}
 @keyframes authPulse{50%{opacity:.4;box-shadow:0 0 3px #fff}}@keyframes authShine{0%,100%{background-position:0 0}50%{background-position:100% 0}}
@@ -1282,6 +1282,7 @@ img,video,canvas,svg{max-width:100%}
 <style id="pr-reference-mobile-navigation">
 .pr-bottom-nav{display:none}
 @media(max-width:768px){
+ body.pr-chat-open .pr-bottom-nav{display:none!important}
  .pr-bottom-nav{position:fixed;z-index:80;left:12px;right:12px;bottom:calc(9px + env(safe-area-inset-bottom));height:76px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:6px;background:rgba(28,28,28,.94);border:1px solid rgba(255,255,255,.08);border-radius:28px;box-shadow:0 12px 45px #0009,inset 0 1px #ffffff0c;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
  .pr-nav-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;border:0;border-radius:22px;background:transparent;color:#b7b7b7;font:inherit;cursor:pointer;transition:background .22s,color .22s,transform .22s}
  .pr-nav-item>span{font-size:27px;line-height:1.05;font-weight:400}.pr-nav-item>b{font-size:11px;font-weight:650;white-space:nowrap}.pr-nav-item.active{background:#383633;color:#f7eadb;box-shadow:inset 0 1px #ffffff0b}.pr-nav-item:active{transform:scale(.94)}
@@ -1382,7 +1383,7 @@ function prAdminBadge(username){return String(username||'').replace(/^@/,'').toL
 function prSetNav(view){document.querySelectorAll('.pr-nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view));}
 function prNavigate(view){
  prSetNav(view);
- if(view==='chats'){document.body.classList.remove('pr-profile-view');$('chatMainPanel').classList.remove('mobile-active');$('sidebarPanel').classList.remove('mobile-hidden');loadDialogs();return;}
+ if(view==='chats'){document.body.classList.remove('pr-profile-view','pr-chat-open');$('chatMainPanel').classList.remove('mobile-active');$('sidebarPanel').classList.remove('mobile-hidden');activeUser=null;activeGroup=null;loadDialogs();return;}
  if(view==='settings'){openAppSettings();return;}
  if(view==='profile'){openProfileScreen();return;}
  if(view==='contacts'){openContactsScreen();return;}
@@ -1432,7 +1433,7 @@ function accountInfo() {
   $('modalContent').innerHTML = `<h3 style="margin-bottom:12px">مدیریت حساب</h3><p style="color:var(--text-muted);line-height:1.9;font-size:13px">این مرورگر برای ساخت حداکثر دو حساب محدود شده است. برای ورود به حساب دیگر از خروج استفاده کن و با حساب دوم وارد شو. محدودیت به شناسهٔ ذخیره‌شده در کوکی مرورگر وابسته است و محدودیت هویتیِ ضدتقلب محسوب نمی‌شود.</p><button onclick="location.href='/logout'" style="margin-top:16px;padding:11px;border:0;border-radius:10px;background:var(--accent);color:#06121e;font-weight:bold;width:100%;cursor:pointer">خروج از حساب</button><button onclick="closeModal()" style="margin-top:8px;padding:10px;border:1px solid #30465f;border-radius:10px;background:transparent;color:white;width:100%;cursor:pointer">بستن</button>`;
   $('modalOverlay').classList.remove('hidden');
 }
-function closeChatMobile(e) { e?.stopPropagation(); $('chatMainPanel').classList.remove('mobile-active'); }
+function closeChatMobile(e) { e?.stopPropagation(); $('chatMainPanel').classList.remove('mobile-active'); document.body.classList.remove('pr-chat-open'); $('sidebarPanel').classList.remove('mobile-hidden'); }
 
 async function api(url, opts={}) {
   let r = await fetch(url, {...opts, headers:{'Content-Type':'application/json', ...(opts.headers||{})}});
@@ -1476,7 +1477,7 @@ async function openGroupChat(id, title) {
   $('activeAvatar').style.backgroundImage=''; $('activeAvatar').textContent='👥';
   const d = await api('/api/groups/'+id+'/messages');
   $('chatMessages').innerHTML=''; seenMessageIds.clear(); d.messages.forEach(m => appendMessage(m, true)); scrollBottom();
-  if(window.innerWidth<=768) $('chatMainPanel').classList.add('mobile-active');
+  if(window.innerWidth<=768) { $('chatMainPanel').classList.add('mobile-active'); document.body.classList.add('pr-chat-open'); }
 }
 
 async function searchUsers() {
@@ -1528,7 +1529,7 @@ async function openUserChat(id, name, username, avatar) {
   seenMessageIds.clear();
   d.messages.forEach(appendMessage);
   scrollBottom();
-  if(window.innerWidth <= 768) $('chatMainPanel').classList.add('mobile-active');
+  if(window.innerWidth <= 768) { $('chatMainPanel').classList.add('mobile-active'); document.body.classList.add('pr-chat-open'); }
   loadDialogs();
 }
 
