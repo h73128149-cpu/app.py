@@ -568,6 +568,8 @@ body[data-theme="light"] .message-bubble.mine { background:#e5e5e5 !important; c
 body[data-theme="light"] .message-bubble:not(.mine) { background:#f2f2f2 !important; color:#111 !important; }
 body[data-theme="light"] input, body[data-theme="light"] textarea, body[data-theme="light"] select { color:#111 !important; }
 
+
+.pr-dialog-head{display:flex;gap:13px;align-items:flex-start;margin:4px 0 18px}.pr-dialog-icon{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:14px;background:var(--panel-hover);border:1px solid var(--border-color);font-size:22px}.pr-dialog-head h3{margin:2px 0 7px;font-size:17px}.pr-dialog-head p{margin:0;color:var(--text-muted);line-height:1.8;font-size:13px;overflow-wrap:anywhere}.pr-dialog-actions{display:flex;gap:9px;margin-top:16px}.pr-dialog-actions button{flex:1;padding:11px 14px;border-radius:11px;cursor:pointer;font-weight:700}.pr-btn-primary{border:1px solid var(--border-color);background:var(--accent);color:var(--button-text,#000)}.pr-btn-secondary{border:1px solid var(--border-color);background:var(--panel-hover);color:var(--text-main,#fff)}.pr-dialog-input{box-sizing:border-box;width:100%;resize:vertical;min-height:90px;padding:12px;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-main);color:var(--text-main,#fff);font:inherit;outline:none}.pr-dialog-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #8882}
 </style>
 
 <style id="pr-enhancements">
@@ -833,6 +835,27 @@ body[data-theme="light"] .chat-row.active{background:#e7e7e7!important;border-co
 body[data-theme="light"] .search-container,body[data-theme="light"] .composer-input,body[data-theme="light"] .modal-card input,body[data-theme="light"] .modal-card textarea,body[data-theme="light"] .modal-card select{background:#f7f7f7!important;color:#111!important;border-color:#ddd!important}
 @media(max-width:768px){.tg-app{padding:0}.folder-rail{border-radius:0;width:54px}.sidebar{border-radius:0}.chat-composer{margin:5px!important}.message-bubble{max-width:88%}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+
+/* ULTIMATE VISUAL PACK: monochrome luxury + premium storefront + emoji/sticker tray */
+.pr-top-actions{display:flex;align-items:center;gap:7px;padding:10px 14px 13px;background:#0c0c0c;border-bottom:1px solid #242424}
+.pr-pro-shop{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;border-radius:15px;border:1px solid #444;background:linear-gradient(110deg,#292929,#111);color:#fff;cursor:pointer;text-align:right;box-shadow:0 8px 25px #0007}
+.pr-pro-shop b{font-size:12px;letter-spacing:.3px}.pr-pro-shop small{display:block;color:#aaa;font-size:10px;margin-top:3px}
+.pr-crown{display:grid;place-items:center;width:35px;height:35px;border-radius:12px;background:linear-gradient(145deg,#f4f4f4,#999);color:#080808;font-size:20px;box-shadow:0 0 25px #fff2}
+.pr-composer-tools{display:flex;gap:5px;align-items:center}
+.pr-tool-btn{width:39px;height:40px;border:1px solid #2b2b2b;background:#151515;color:#eee;border-radius:13px;cursor:pointer;font-size:19px}
+.pr-tool-btn:hover{background:#303030;transform:translateY(-2px)}
+.pr-premium-hero{position:relative;overflow:hidden;padding:24px;border:1px solid #3b3b3b;border-radius:22px;background:radial-gradient(ellipse at 90% 0%,#ffffff22,transparent 45%),linear-gradient(135deg,#222,#090909);margin-bottom:16px}
+.pr-premium-hero:after{content:'✦';position:absolute;right:22px;bottom:-42px;font-size:150px;color:#ffffff08;pointer-events:none}
+.pr-premium-hero .eyebrow{font-size:10px;letter-spacing:3px;color:#aaa}.pr-premium-hero h2{font-size:28px;margin:12px 0 8px;letter-spacing:-1px}.pr-premium-hero p{color:#aaa;font-size:12px;line-height:1.9;max-width:360px}
+.pr-plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pr-plan{padding:16px;border:1px solid #333;border-radius:18px;background:linear-gradient(145deg,#181818,#0b0b0b)}.pr-plan.featured{border-color:#aaa;box-shadow:inset 0 0 0 1px #ffffff10}.pr-plan h3{font-size:14px;margin:8px 0}.pr-plan .price{font-size:23px;font-weight:900}.pr-plan p{font-size:11px;color:#999;line-height:1.8;min-height:40px}.pr-plan button,.pr-shop-cta{width:100%;border:1px solid #eee;border-radius:12px;padding:11px;background:#eee;color:#080808;font-weight:900;cursor:pointer;margin-top:10px}.pr-plan button.secondary{background:#171717;color:#eee;border-color:#3b3b3b}
+.pr-perks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.pr-perk{padding:12px;border:1px solid #292929;border-radius:13px;background:#101010}.pr-perk b{display:block;font-size:12px;margin:7px 0 4px}.pr-perk span{font-size:10px;color:#999;line-height:1.7}
+.pr-picker-tabs{display:flex;gap:7px;margin:12px 0}.pr-picker-tabs button{flex:1;border:1px solid #333;background:#111;color:#eee;padding:9px;border-radius:11px;cursor:pointer}.pr-picker-tabs button.active{background:#eee;color:#111}
+.pr-emoji-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}.pr-emoji-grid button{background:#151515;border:1px solid #292929;border-radius:10px;padding:7px 0;font-size:23px;cursor:pointer}.pr-sticker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pr-sticker{min-height:92px;background:linear-gradient(145deg,#202020,#101010);border:1px solid #343434;border-radius:15px;color:white;font-size:34px;cursor:pointer}.pr-sticker small{display:block;font-size:10px;color:#aaa;margin-top:4px}
+.pr-badge{display:inline-block;border:1px solid #555;border-radius:999px;padding:4px 8px;font-size:10px;color:#ddd}
+@keyframes prShine{0%,100%{box-shadow:0 0 0 #fff0}50%{box-shadow:0 0 24px #fff2}}
+.pr-pro-shop{animation:prShine 4s ease-in-out infinite}
+@media(max-width:520px){.pr-plan-grid{grid-template-columns:1fr}.pr-emoji-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.pr-premium-hero h2{font-size:24px}}
+
 </style>
 </head>
 <body>
@@ -848,7 +871,7 @@ body[data-theme="light"] .search-container,body[data-theme="light"] .composer-in
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 17px 4px;background:linear-gradient(135deg,#14253a,#101a29);">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
         <div style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#43c6ff,#635bff);box-shadow:0 5px 18px #43c6ff30;font-size:20px;">✦</div>
-        <div><div style="font-weight:800;letter-spacing:.2px;font-size:15px;">PayamRasan <span style="color:#43c6ff">Pro</span></div><div style="font-size:10px;color:#91a8c0;">PRIVATE MESSENGER</div></div>
+        <div><div style="font-weight:800;letter-spacing:.2px;font-size:15px;">PayamRasan <span style="color:#43c6ff">Pro</span></div><div style="font-size:10px;color:#91a8c0;">PRIVATE MESSENGER · <span style="color:#ddd">✦ PRO</span></div></div>
       </div>
       <button type="button" title="حساب فعلی و مدیریت حساب‌ها" onclick="accountInfo()" style="border:1px solid #30465f;background:#0b1421;color:#a9c9e8;border-radius:11px;padding:8px 10px;cursor:pointer;">👤 حساب</button>
     </div>
@@ -857,6 +880,7 @@ body[data-theme="light"] .search-container,body[data-theme="light"] .composer-in
         <input id="searchInput" placeholder="جستجو آیدی..." oninput="searchUsers()">
       </div>
     </div>
+    <div class="pr-top-actions"><button class="pr-pro-shop" type="button" onclick="openPremiumShop()"><span><b>✦ عضویت PRO MAX</b><small>استیکرهای خاص • ظاهر لوکس • قابلیت‌های ویژه</small></span><span class="pr-crown">♛</span></button></div>
     <div class="chat-list" id="chatList"></div>
   </aside>
 
@@ -878,6 +902,7 @@ body[data-theme="light"] .search-container,body[data-theme="light"] .composer-in
 
     <form class="chat-composer" onsubmit="sendMessage(event)">
       <button type="button" class="action-btn" onclick="$('fileInput').click()" title="ارسال فایل">📎</button>
+      <div class="pr-composer-tools"><button type="button" class="pr-tool-btn" onclick="openEmojiPicker('emoji')" title="ایموجی">😊</button><button type="button" class="pr-tool-btn" onclick="openEmojiPicker('sticker')" title="استیکر">🧸</button></div>
       <input type="file" id="fileInput" hidden onchange="handleFileUpload(this)">
       <button type="button" class="action-btn" id="voiceBtn" onclick="toggleVoiceRecording()" title="ضبط پیام صوتی">🎙️</button>
       <textarea id="messageInput" class="composer-input" placeholder="نوشتن پیام..." oninput="notifyTyping()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage(event)}"></textarea>
@@ -895,7 +920,33 @@ const meId = {{me['id']}};
 let activeUser = null;
 let activeGroup = null;
 const $ = id => document.getElementById(id);
-function closeModal() { $('modalOverlay').classList.add('hidden'); }
+function closeModal() {
+  $('modalOverlay').classList.add('hidden');
+  if (typeof window.__prDialogResolve === 'function') {
+    const resolve = window.__prDialogResolve; window.__prDialogResolve = null; resolve(null);
+  }
+}
+function showConfirm(message, title='تأیید عملیات') {
+  return new Promise(resolve => {
+    window.__prDialogResolve = value => { window.__prDialogResolve = null; resolve(value === true); };
+    $('modalContent').innerHTML = `<div class="pr-dialog-head"><div class="pr-dialog-icon">?</div><div><h3>${esc(title)}</h3><p>${esc(message)}</p></div></div><div class="pr-dialog-actions"><button class="pr-btn-secondary" onclick="resolvePrDialog(false)">انصراف</button><button class="pr-btn-primary" onclick="resolvePrDialog(true)">تأیید</button></div>`;
+    $('modalOverlay').classList.remove('hidden');
+  });
+}
+function showInput(message, initialValue='', title='ویرایش') {
+  return new Promise(resolve => {
+    window.__prDialogResolve = value => { window.__prDialogResolve = null; resolve(value); };
+    $('modalContent').innerHTML = `<div class="pr-dialog-head"><div class="pr-dialog-icon">✎</div><div><h3>${esc(title)}</h3><p>${esc(message)}</p></div></div><textarea id="prDialogInput" class="pr-dialog-input" rows="4">${esc(initialValue)}</textarea><div class="pr-dialog-actions"><button class="pr-btn-secondary" onclick="resolvePrDialog(null)">انصراف</button><button class="pr-btn-primary" onclick="resolvePrDialog(document.getElementById('prDialogInput').value)">ذخیره</button></div>`;
+    $('modalOverlay').classList.remove('hidden');
+    setTimeout(() => $('prDialogInput')?.focus(), 30);
+  });
+}
+function resolvePrDialog(value) {
+  const resolve = window.__prDialogResolve;
+  window.__prDialogResolve = null;
+  $('modalOverlay').classList.add('hidden');
+  if (typeof resolve === 'function') resolve(value);
+}
 function accountInfo() {
   $('modalContent').innerHTML = `<h3 style="margin-bottom:12px">مدیریت حساب</h3><p style="color:var(--text-muted);line-height:1.9;font-size:13px">این مرورگر برای ساخت حداکثر دو حساب محدود شده است. برای ورود به حساب دیگر از خروج استفاده کن و با حساب دوم وارد شو. محدودیت به شناسهٔ ذخیره‌شده در کوکی مرورگر وابسته است و محدودیت هویتیِ ضدتقلب محسوب نمی‌شود.</p><button onclick="location.href='/logout'" style="margin-top:16px;padding:11px;border:0;border-radius:10px;background:var(--accent);color:#06121e;font-weight:bold;width:100%;cursor:pointer">خروج از حساب</button><button onclick="closeModal()" style="margin-top:8px;padding:10px;border:1px solid #30465f;border-radius:10px;background:transparent;color:white;width:100%;cursor:pointer">بستن</button>`;
   $('modalOverlay').classList.remove('hidden');
@@ -930,7 +981,7 @@ async function loadGroups() {
   try {
     const d = await api('/api/groups');
     $('chatList').innerHTML = d.groups.map(g => `<div class="chat-row" onclick="openGroupChat(${g.id},'${esc(g.title)}')"><div class="avatar">👥</div><div><div style="font-weight:600">${esc(g.title)}</div><div style="font-size:12px;color:var(--text-muted)">گفتگوی گروهی · #${g.id}</div></div></div>`).join('') || '<div style="padding:20px;color:var(--text-muted)">هنوز گروهی نداری؛ روی 👥 بزن.</div>';
-  } catch(e) { alert(e.message); }
+  } catch(e) { showToast(e.message); }
 }
 async function openGroupChat(id, title) {
   activeGroup = {id, title}; activeUser = null;
@@ -1010,6 +1061,24 @@ function notifyTyping() {
   }, 1500);
 }
 
+const PR_EMOJIS = ['😀','😃','😄','😁','😆','🥹','😂','🤣','😊','😎','😍','🥰','😘','😜','🤪','🤔','🫡','🥳','😴','😭','😤','😈','👻','💀','🤖','🔥','✨','💯','❤️','🖤','🤍','💔','💘','💎','👑','⚡','🌙','⭐','🌹','🫶','👏','👍','👎','🙏','🤝','💪','🎉','🎁','🚀','🐈','🐼','🦋','🌈','🍕','☕','🎮','🏆','⚽','🎧','💬','🧸','🫠','🫣'];
+const PR_STICKERS = [['😎','خفن'],['👑','سلطان'],['🖤','دارک'],['🔥','آتشین'],['🥹','احساسی'],['💀','ری‌اکشن'],['🫡','چشم قربان'],['🦋','خاص'],['🐼','پاندا'],['🤡','شوخی'],['🚀','بزن بریم'],['✨','درخشان']];
+function openEmojiPicker(tab='emoji'){
+ const emojiHtml=()=>`<div class="pr-emoji-grid">${PR_EMOJIS.map(x=>`<button type="button" onclick="insertPRToken('${x}')">${x}</button>`).join('')}</div>`;
+ const stickerHtml=()=>`<div class="pr-sticker-grid">${PR_STICKERS.map(x=>`<button class="pr-sticker" type="button" onclick="sendPRSticker('${x[0]}','${x[1]}')">${x[0]}<small>${x[1]}</small></button>`).join('')}</div><p style="font-size:10px;color:#888;line-height:1.8;margin-top:12px">این بستهٔ استیکر فعلاً با ایموجی‌های بزرگ ارسال می‌شود؛ برای استیکرهای تصویری واقعی باید فایل‌های استیکر به سرور اضافه شوند.</p>`;
+ $('modalContent').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between"><div><h3>ایموجی و استیکر</h3><p style="font-size:11px;color:#999;margin-top:5px">حالتت رو با یه واکنش نشون بده ✨</p></div><span class="pr-badge">PAYAMR PRO</span></div><div class="pr-picker-tabs"><button id="prEmojiTab" class="${tab==='emoji'?'active':''}" onclick="switchPRPicker('emoji')">😊 ایموجی</button><button id="prStickerTab" class="${tab==='sticker'?'active':''}" onclick="switchPRPicker('sticker')">🧸 استیکر</button></div><div id="prPickerBody">${tab==='emoji'?emojiHtml():stickerHtml()}</div><button onclick="closeModal()" style="width:100%;padding:10px;border:1px solid #333;border-radius:12px;background:#111;color:#ddd;margin-top:12px">بستن</button>`;
+ window.prEmojiHtml=emojiHtml;window.prStickerHtml=stickerHtml;$('modalOverlay').classList.remove('hidden');
+}
+function switchPRPicker(tab){$('prEmojiTab').classList.toggle('active',tab==='emoji');$('prStickerTab').classList.toggle('active',tab==='sticker');$('prPickerBody').innerHTML=tab==='emoji'?window.prEmojiHtml():window.prStickerHtml();}
+function insertPRToken(token){const input=$('messageInput');if(!input)return;const start=input.selectionStart??input.value.length;const end=input.selectionEnd??start;input.value=input.value.slice(0,start)+token+input.value.slice(end);input.focus();input.selectionStart=input.selectionEnd=start+token.length;closeModal();}
+async function sendPRSticker(emoji,label){if(!activeUser&&!activeGroup){showToast('اول یک گفتگو انتخاب کن.');return;}closeModal();$('messageInput').value=emoji+' '+label;await sendMessage();}
+function openPremiumShop(){
+ const isDemo=localStorage.getItem('pr_demo_premium')==='1';
+ $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">PAYAMRASAN • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">قیمت‌گذاری</div><p>برای تجربهٔ قابلیت‌های ویژه در یک دورهٔ ماهانه.</p><button class="secondary" onclick="showToast('درگاه پرداخت هنوز متصل نشده؛ قیمت واقعی دریافت نمی‌شود.')">انتخاب ماهانه</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">پیش‌نمایش</div><p>تمام امکانات نمایشی و بسته‌های ظاهری ویژه.</p><button onclick="activateDemoPremium()">${isDemo?'فعال است ✓':'فعال‌سازی نمایشی'}</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">شفافیت: پرداخت واقعی و تأیید سمت سرور هنوز پیاده‌سازی نشده است. دکمهٔ فعال‌سازی فقط برای پیش‌نمایش ظاهر قابلیت‌ها روی همین دستگاه است و پولی دریافت نمی‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
+ $('modalOverlay').classList.remove('hidden');
+}
+function activateDemoPremium(){localStorage.setItem('pr_demo_premium','1');showToast('حالت نمایشی PRO فعال شد؛ پرداختی انجام نشده است.');openPremiumShop();}
+
 async function sendMessage(e) {
   e?.preventDefault();
   let body = $('messageInput').value.trim();
@@ -1082,8 +1151,8 @@ async function openAppSettings() {
   $('modalOverlay').classList.remove('hidden');
 }
 async function saveAppSettings() {
-  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value})}); applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); alert(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
-  catch(e){ alert(e.message); }
+  try { const bg=$('settingBg').value.trim(); const lang=$('settingLanguage')?.value || getAppLanguage(); localStorage.setItem('pr-language',lang); await api('/api/settings',{method:'POST',body:JSON.stringify({chat_background:bg,show_last_seen:$('settingSeen').checked,theme:$('settingTheme').value})}); applyChatBackground(bg); applyTheme($('settingTheme').value); applyLanguage(lang); showToast(lang==='en'?'Settings saved':'تنظیمات ذخیره شد'); closeModal(); }
+  catch(e){ showToast(e.message); }
 }
 
 async function updateProfile(e) {
@@ -1095,7 +1164,7 @@ async function updateProfile(e) {
     fd.append('file', avatarFile);
     const uploaded = await fetch('/api/upload', {method:'POST', body:fd});
     const uploadData = await uploaded.json();
-    if (!uploaded.ok) { alert(uploadData.error || 'بارگذاری عکس انجام نشد'); return; }
+    if (!uploaded.ok) { showToast(uploadData.error || 'بارگذاری عکس انجام نشد'); return; }
     avatar = location.origin + uploadData.url;
   }
   await api('/api/profile', {method:'POST', body:JSON.stringify({display_name: $('pName').value.trim(), bio: $('pBio').value.trim(), avatar, phone:'', birthday:''})});
@@ -1129,7 +1198,7 @@ async function openHeaderProfile() {
       <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0 0 16px">
         <button onclick="closeModal();focusMessageInput()" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">☏</div><small>پیام</small></button>
         <button onclick="toggleContactMute()" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">🔕</div><small>بی‌صدا</small></button>
-        <button onclick="alert('تماس صوتی هنوز به سرور تماس متصل نشده است.')" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">📞</div><small>تماس</small></button>
+        <button onclick="showToast('تماس صوتی هنوز به سرور تماس متصل نشده است.')" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">📞</div><small>تماس</small></button>
         <button onclick="showContactMore()" style="border:0;border-radius:12px;background:var(--bg-main);color:white;padding:11px 3px;cursor:pointer"><div style="font-size:20px">•••</div><small>بیشتر</small></button>
       </div>
       <div style="background:var(--bg-main);border-radius:12px;padding:13px 14px;display:grid;gap:13px;font-size:13px">
@@ -1150,7 +1219,7 @@ function toggleContactMute(){
   const key='pr-muted-'+(activeUser?.id||'');
   const muted=localStorage.getItem(key)==='1';
   localStorage.setItem(key,muted?'0':'1');
-  alert(muted?'اعلان‌های این مخاطب در این مرورگر از حالت بی‌صدا خارج شد.':'این مخاطب در این مرورگر بی‌صدا شد.');
+  showToast(muted?'اعلان‌های این مخاطب در این مرورگر از حالت بی‌صدا خارج شد.':'این مخاطب در این مرورگر بی‌صدا شد.');
 }
 function showContactMore(){
   $('modalContent').innerHTML=`<h3 style="margin-bottom:14px">مدیریت مخاطب</h3><button onclick="blockContactDemo()" style="width:100%;padding:12px;margin-bottom:8px;border:1px solid #793b45;border-radius:10px;background:#351c24;color:#ff9ca8;cursor:pointer">🚫 مسدود کردن مخاطب</button><button onclick="openHeaderProfile()" style="width:100%;padding:11px;border:1px solid var(--border-color);border-radius:10px;background:transparent;color:white;cursor:pointer">بازگشت به پروفایل</button>`;
@@ -1158,7 +1227,7 @@ function showContactMore(){
 async function blockContactDemo(){
   if (!activeUser) return;
   const en=getAppLanguage()==='en';
-  if (!confirm(en?'Block this contact? They will not be able to message you.':'این مخاطب مسدود شود؟ پس از مسدودسازی امکان پیام‌دادن بین شما محدود می‌شود.')) return;
+  if (!(await showConfirm(en?'Block this contact? They will not be able to message you.':'این مخاطب مسدود شود؟ پس از مسدودسازی امکان پیام‌دادن بین شما محدود می‌شود.','مسدودسازی مخاطب'))) return;
   const blockedName=activeUser.display_name || activeUser.username || (en?'Contact':'مخاطب');
   try {
     await api('/api/block/'+activeUser.id,{method:'POST'});
@@ -1180,7 +1249,7 @@ async function showContactMedia(){
       const label=x.msg_type==='image'?'🖼 Image':x.msg_type==='voice'?'🎙 Voice message':'📎 File';
       return `<div style="padding:10px;margin:6px 0;border:1px solid var(--border-color);border-radius:9px;overflow-wrap:anywhere">${label}<div><a href="${url}" target="_blank" rel="noopener" style="color:var(--accent)">${url}</a></div><small style="color:var(--text-muted)">${esc((x.created_at||'').replace('T',' ').slice(0,16))}</small></div>`;
     }).join(''):`<p style="color:var(--text-muted)">${en?'No shared media yet.':'هنوز رسانه‌ای در این گفتگو نیست.'}</p>`}<button onclick="openHeaderProfile()" style="margin-top:10px;padding:10px;border:1px solid var(--border-color);border-radius:9px;background:transparent;color:var(--text-main,white)">${en?'Back':'بازگشت'}</button>`;
-  } catch(e){ alert(e.message); }
+  } catch(e){ showToast(e.message); }
 }
 
 
@@ -1196,15 +1265,15 @@ function formatLastSeen(value) {
   return d.toLocaleString('fa-IR');
 }
 async function editMessage(id, oldBody) {
-  const body = prompt('متن جدید پیام:', oldBody);
+  const body = await showInput('متن جدید پیام:', oldBody, 'ویرایش پیام');
   if (body === null || !body.trim()) return;
   try { await api(`/api/messages/${id}/edit`, {method:'POST', body:JSON.stringify({body:body.trim()})}); await refreshActiveChat(); }
-  catch(e) { alert(e.message); }
+  catch(e) { showToast(e.message); }
 }
 async function deleteMessage(id) {
-  if (!confirm('این پیام حذف شود؟')) return;
+  if (!(await showConfirm('این پیام حذف شود؟','حذف پیام'))) return;
   try { await api(`/api/messages/${id}/delete`, {method:'POST'}); await refreshActiveChat(); }
-  catch(e) { alert(e.message); }
+  catch(e) { showToast(e.message); }
 }
 async function refreshActiveChat() {
   if (!activeUser) return;
@@ -1213,7 +1282,7 @@ async function refreshActiveChat() {
 }
 async function blockUser(id) {
   const en=getAppLanguage()==='en';
-  if (!confirm(en?'Block this user?':'این کاربر مسدود شود؟')) return;
+  if (!(await showConfirm(en?'Block this user?':'این کاربر مسدود شود؟','مسدودسازی کاربر'))) return;
   try {
     await api('/api/block/' + id, {method:'POST'}); closeModal();
     $('chatMessages').innerHTML = `<div class="system-notice"><div class="system-notice-icon">🚫</div><strong>${en?'User blocked':'کاربر مسدود شد'}</strong><p>${en?'Messaging with this user is now restricted.':'ارسال پیام بین شما محدود شده است.'}</p><button onclick="loadDialogs()">${en?'Back to chats':'بازگشت به گفتگوها'}</button></div>`;
@@ -1221,7 +1290,7 @@ async function blockUser(id) {
   } catch(e) { showToast('⚠️ '+e.message); }
 }
 async function deleteChat(id) {
-  if (!confirm('گفتگو فقط از فهرست شما حذف شود؟ پیام‌های طرف مقابل پاک نمی‌شوند.')) return;
+  if (!(await showConfirm('گفتگو فقط از فهرست شما حذف شود؟ پیام‌های طرف مقابل پاک نمی‌شوند.','حذف گفتگو'))) return;
   await api('/api/chats/' + id, {method:'DELETE'}); closeModal(); activeUser=null;
   $('chatMessages').innerHTML='<div style="margin:auto;color:var(--text-muted)">گفتگو حذف شد.</div>'; loadDialogs();
 }
@@ -1272,8 +1341,8 @@ let recorder = null, recordingChunks = [];
 async function toggleVoiceRecording() {
   const btn = $('voiceBtn');
   if (recorder && recorder.state === 'recording') { recorder.stop(); btn.textContent='🎙️'; btn.style.color=''; return; }
-  if (!activeUser && !activeGroup) { alert('اول یک گفتگو انتخاب کن.'); return; }
-  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { alert('ضبط صدا در این مرورگر پشتیبانی نمی‌شود. در HTTPS یا localhost امتحان کن.'); return; }
+  if (!activeUser && !activeGroup) { showToast('اول یک گفتگو انتخاب کن.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { showToast('ضبط صدا در این مرورگر پشتیبانی نمی‌شود. در HTTPS یا localhost امتحان کن.'); return; }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     recorder = new MediaRecorder(stream); recordingChunks=[];
@@ -1284,25 +1353,25 @@ async function toggleVoiceRecording() {
       if (!blob.size) return;
       const fd = new FormData(); fd.append('file', blob, 'voice.webm');
       const up = await fetch('/api/upload',{method:'POST',body:fd}); const ud = await up.json();
-      if (!up.ok) { alert(ud.error || 'ارسال صدا ناموفق بود'); return; }
+      if (!up.ok) { showToast(ud.error || 'ارسال صدا ناموفق بود'); return; }
       const payload={body:location.origin+ud.url,msg_type:'voice'};
       const sent = activeGroup ? await api('/api/groups/'+activeGroup.id+'/messages',{method:'POST',body:JSON.stringify(payload)}) : await api('/api/messages',{method:'POST',body:JSON.stringify({...payload,receiver_id:activeUser.id})});
       appendMessage(sent.message, !!activeGroup); scrollBottom(); if(!activeGroup) loadDialogs();
     };
     recorder.start(); btn.textContent='⏹️'; btn.style.color='#f87171';
-  } catch(e) { alert('اجازه دسترسی به میکروفون داده نشد یا ضبط صدا ممکن نیست.'); }
+  } catch(e) { showToast('اجازه دسترسی به میکروفون داده نشد یا ضبط صدا ممکن نیست.'); }
 }
 async function createGroup() {
-  alert(getAppLanguage()==='en'?'Groups are temporarily disabled.':'بخش گروه‌ها فعلاً غیرفعال است.');
+  showToast(getAppLanguage()==='en'?'Groups are temporarily disabled.':'بخش گروه‌ها فعلاً غیرفعال است.');
   return;
-  const title = prompt('نام گروه را وارد کن:');
+  const title = await showInput('نام گروه را وارد کن:', '', 'ساخت گروه');
   if (!title?.trim()) return;
-  const membersText = prompt('آیدی اعضا را با کاما جدا کن (مثلاً 2,3). خودت هم عضو می‌شوی:');
+  const membersText = await showInput('آیدی اعضا را با کاما جدا کن (مثلاً 2,3). خودت هم عضو می‌شوی:', '', 'اعضای گروه');
   const memberIds = (membersText||'').split(',').map(x=>parseInt(x.trim(),10)).filter(Number.isInteger);
   try {
     const d = await api('/api/groups',{method:'POST',body:JSON.stringify({title:title.trim(),members:memberIds})});
     await loadGroups(); await openGroupChat(d.id,d.title);
-  } catch(e) { alert(e.message); }
+  } catch(e) { showToast(e.message); }
 }
 
 function switchFolder(f) { loadDialogs(); }
@@ -1320,8 +1389,8 @@ function messageMenu(m,isGroup=false) {
   window._messageChoices=choices; $('modalContent').innerHTML=html; $('modalOverlay').classList.remove('hidden');
 }
 function runMessageChoice(i){const c=window._messageChoices?.[i];if(c){closeModal();Promise.resolve(c[1]()).catch(()=>{});}}
-async function togglePinMessage(id){try{const d=await api('/api/messages/'+id+'/pin',{method:'POST'});await refreshActiveChat();alert(d.pinned?'پیام سنجاق شد':'سنجاق پیام برداشته شد');}catch(e){alert(e.message);}}
-async function reactToMessage(id){const reaction=prompt('واکنش را انتخاب کن: 👍 ❤️ 😂 😮 😢 🔥 👏 🤔','👍');if(reaction===null)return;try{await api('/api/messages/'+id+'/react',{method:'POST',body:JSON.stringify({reaction:reaction.trim()})});await refreshActiveChat();}catch(e){alert(e.message);}}
+async function togglePinMessage(id){try{const d=await api('/api/messages/'+id+'/pin',{method:'POST'});await refreshActiveChat();showToast(d.pinned?'پیام سنجاق شد':'سنجاق پیام برداشته شد');}catch(e){showToast(e.message);}}
+async function reactToMessage(id){const reaction=await showInput('واکنش را انتخاب کن: 👍 ❤️ 😂 😮 😢 🔥 👏 🤔','👍','واکنش به پیام');if(reaction===null)return;try{await api('/api/messages/'+id+'/react',{method:'POST',body:JSON.stringify({reaction:reaction.trim()})});await refreshActiveChat();}catch(e){showToast(e.message);}}
 function appendMessage(m, isGroup=false) {
   if (m.id != null && seenMessageIds.has(m.id)) return;
   if (m.id != null) seenMessageIds.add(m.id);
