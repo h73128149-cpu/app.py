@@ -602,23 +602,35 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-even
 .error{border:1px solid #ffffff20;background:#ffffff0c!important;color:#fff!important;border-radius:13px}
 @keyframes prAuthIn{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(max-width:480px){body{padding:16px}.auth-card{border-radius:23px;padding:28px 22px}.auth-card:before{width:58px;height:58px}}
+.auth-live-badge{display:inline-flex;align-items:center;gap:8px;border:1px solid #ffffff18;background:#ffffff08;color:#bdbdbd;padding:7px 11px;border-radius:99px;font-size:11px;margin-bottom:17px}
+.auth-live-badge span{width:7px;height:7px;border-radius:50%;background:#f5f5f5;box-shadow:0 0 13px #fff;animation:authPulse 1.8s infinite}
+.auth-lead{color:#929292;font-size:13px;line-height:1.9;margin-top:4px}
+.auth-password-wrap{position:relative}.auth-password-wrap input{padding-left:76px!important}.auth-password-wrap .auth-eye{position:absolute;left:8px;top:5px;width:auto;height:42px!important;margin:0;padding:0 11px;background:#1b1b1b!important;border:1px solid #333!important;color:#ddd!important;font-size:11px;box-shadow:none!important}
+.auth-card .auth-submit{display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(110deg,#fff,#aaa 45%,#f8f8f8)!important;background-size:200% 100%!important;animation:authShine 5s linear infinite;color:#050505!important}
+.auth-switch{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:20px;font-size:12px;color:#888}.auth-switch a{margin:0!important;text-decoration:none!important;color:#fff!important;font-weight:800}
+.auth-benefits{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:25px}.auth-benefits span{font-size:10px;color:#8b8b8b;padding:7px 9px;border:1px solid #ffffff10;border-radius:99px;background:#ffffff04}
+@keyframes authPulse{50%{opacity:.4;box-shadow:0 0 3px #fff}}@keyframes authShine{0%,100%{background-position:0 0}50%{background-position:100% 0}}
+@media(max-width:420px){.auth-benefits{gap:5px}.auth-benefits span{font-size:9px;padding:6px 7px}}
 </style>
 </head>
 <body>
 <div class="auth-card">
+  <div class="auth-live-badge"><span></span> پیام‌رسان خصوصی نسل جدید</div>
   <h2 style="margin-bottom: 20px; font-weight: 700;">{{title}}</h2>
+  <p class="auth-lead">گفت‌وگوهای تو، با ظاهر و تجربه‌ای متفاوت.</p>
   {% if error %}<div class="error">{{error}}</div>{% endif %}
   <form method="post">
     {% if action=='register' %}
     <input name="display_name" placeholder="نام نمایشی" required>
     {% endif %}
     <input name="username" placeholder="نام کاربری (آیدی)" required>
-    <input name="password" type="password" placeholder="رمز عبور" required>
-    <button type="submit">{{title}}</button>
+    <div class="auth-password-wrap"><input id="authPassword" name="password" type="password" placeholder="رمز عبور" autocomplete="current-password" required><button class="auth-eye" type="button" onclick="const p=document.getElementById('authPassword');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'نمایش':'مخفی'">نمایش</button></div>
+    <button class="auth-submit" type="submit"><span>{{title}}</span><span aria-hidden="true"> ← </span></button>
   </form>
-  <div style="margin-top: 18px;">
-    {% if action=='login' %}<a href="{{url_for('register')}}">ساخت حساب جدید</a>{% else %}<a href="{{url_for('login')}}">ورود به حساب</a>{% endif %}
+  <div class="auth-switch">
+    {% if action=='login' %}<span>هنوز حساب نداری؟</span><a href="{{url_for('register')}}">ساخت حساب جدید ↗</a>{% else %}<span>قبلاً ثبت‌نام کردی؟</span><a href="{{url_for('login')}}">ورود به حساب ↗</a>{% endif %}
   </div>
+  <div class="auth-benefits"><span>🔒 ارتباط خصوصی</span><span>⚡ سریع و سبک</span><span>✦ طراحی PRO</span></div>
 </div>
 </body>
 </html>
@@ -968,6 +980,79 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 </head>
 <body>
 
+<style id="pr-mobile-fix-and-polish">
+html,body{width:100%;max-width:100%;overflow:hidden}body{overscroll-behavior:none}.tg-app{width:100%;max-width:100%;min-width:0;overflow:hidden;gap:0}.sidebar,.chat-main,.folder-rail{min-width:0}.sidebar-header>*,.chat-topbar>*,.chat-composer>*{min-width:0}.pr-top-actions{flex-wrap:wrap}.pr-pro-shop{max-width:100%;min-width:0}.pr-pro-shop *{overflow-wrap:anywhere}.chat-row,.chat-topbar-info,.message-bubble{overflow-wrap:anywhere}
+@media(max-width:768px){
+ .tg-app{display:block!important;padding:0!important;width:100vw!important;height:100dvh!important;overflow:hidden!important}
+ .folder-rail{display:none!important}
+ .sidebar{display:flex!important;position:absolute!important;inset:0!important;right:0!important;left:0!important;top:0!important;width:100%!important;max-width:100%!important;height:100%!important;height:100dvh!important;transform:none!important;border:0!important;border-radius:0!important;z-index:10!important}
+ .chat-main{display:flex!important;position:absolute!important;inset:0!important;right:0!important;left:0!important;width:100%!important;max-width:100%!important;height:100%!important;height:100dvh!important;transform:translateX(105%)!important;z-index:30!important;transition:transform .28s cubic-bezier(.2,.8,.2,1)!important}
+ .chat-main.mobile-active{transform:translateX(0)!important}
+ .sidebar.mobile-hidden{display:none!important}
+ .sidebar-header{padding:12px!important;min-height:66px!important}
+ .pr-top-actions{padding:9px 11px!important}
+ .pr-pro-shop{padding:12px!important}
+ .chat-topbar{padding:8px 10px!important;min-width:0!important}
+ .chat-topbar-info{flex:1;overflow:hidden}
+ .chat-topbar-info>*{min-width:0}
+ .chat-messages{padding:12px 10px!important;min-width:0!important}
+ .chat-composer{margin:5px!important;padding:7px!important;gap:4px!important;max-width:calc(100% - 10px)!important}
+ .composer-input{min-width:0!important;width:100%!important}
+ .pr-tool-btn{flex:0 0 35px!important;width:35px!important;height:37px!important}
+ .modal-card{width:min(440px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important}
+}
+@media(max-width:380px){.pr-pro-shop small{font-size:9px}.pr-crown{width:31px;height:31px}.chat-composer{gap:2px!important}.pr-tool-btn{flex-basis:32px!important;width:32px!important;font-size:16px!important}.action-btn{font-size:18px!important;padding:3px!important}}
+@media(prefers-reduced-motion:reduce){.auth-live-badge span,.auth-submit{animation:none!important}}
+/* FINAL POLISH: mobile-first layout, clearer hierarchy, premium controls */
+:root{--pr-glow:0 0 28px #ffffff0b}
+*{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden!important}
+button,input,textarea{font:inherit}
+button{ -webkit-tap-highlight-color:transparent }
+.tg-app{isolation:isolate;background:radial-gradient(ellipse at 50% -20%,#ffffff0b,transparent 55%),#070707!important}
+.folder-rail{background:linear-gradient(180deg,#111,#080808)!important;border-color:#ffffff12!important}
+.sidebar{background:linear-gradient(180deg,#111111f5,#080808f8)!important;border-color:#ffffff14!important;box-shadow:20px 0 60px #0004}
+.chat-main{background:radial-gradient(ellipse at 50% 0%,#ffffff07,transparent 45%),#080808!important;border-color:#ffffff13!important}
+.chat-topbar{background:#0b0b0beF!important;border-bottom:1px solid #ffffff12!important;backdrop-filter:blur(18px)}
+.chat-composer{border:1px solid #ffffff18!important;background:linear-gradient(145deg,#171717,#0b0b0b)!important;box-shadow:0 12px 36px #0007,inset 0 1px #ffffff08!important}
+.composer-input{outline:none!important}
+.chat-row{border:1px solid transparent!important;transition:background .2s,border-color .2s,transform .2s!important}
+.chat-row:hover{background:#ffffff08!important;border-color:#ffffff10!important;transform:translateX(-2px)}
+.chat-row.active{background:linear-gradient(100deg,#ffffff12,#ffffff05)!important;border-color:#ffffff16!important}
+.action-btn,.pr-tool-btn{transition:transform .18s,background .18s,border-color .18s!important}
+.action-btn:active,.pr-tool-btn:active,button:active{transform:scale(.96)}
+.pr-pro-shop{position:relative;overflow:hidden;border:1px solid #ffffff24!important;background:linear-gradient(120deg,#222,#101010 55%,#1a1a1a)!important;box-shadow:var(--pr-glow),inset 0 1px #ffffff0c!important}
+.pr-pro-shop:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,transparent 20%,#ffffff0b 48%,transparent 70%);transform:translateX(-120%);animation:prFinalShine 7s ease-in-out infinite}
+@keyframes prFinalShine{0%,65%,100%{transform:translateX(-120%)}85%{transform:translateX(120%)}}
+.message-bubble{overflow-wrap:anywhere;word-break:break-word;box-shadow:0 8px 25px #0003}
+img,video,canvas,svg{max-width:100%}
+.modal-overlay{padding:12px!important;overflow-y:auto!important}
+.modal-card{max-height:calc(100dvh - 24px)!important;overflow-y:auto!important}
+@media(max-width:768px){
+ body{padding:0!important;margin:0!important;width:100%!important;min-width:0!important}
+ .tg-app{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:100vw!important;min-width:0!important;display:block!important;padding:0!important;margin:0!important;overflow:hidden!important}
+ .sidebar,.chat-main{box-sizing:border-box!important;min-width:0!important;max-width:100vw!important}
+ .sidebar{padding-bottom:env(safe-area-inset-bottom)!important}
+ .chat-main{padding-bottom:env(safe-area-inset-bottom)!important}
+ .chat-messages{min-width:0!important;overflow-x:hidden!important}
+ .chat-topbar{gap:7px!important}
+ .chat-topbar-info{min-width:0!important;flex:1 1 auto!important}
+ .chat-topbar-info h3,.chat-topbar-info div{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+ .chat-composer{width:calc(100% - 12px)!important;box-sizing:border-box!important}
+ .composer-input{flex:1 1 30px!important;min-width:0!important}
+ .pr-emoji-grid{grid-template-columns:repeat(7,minmax(0,1fr))!important}
+}
+@media(max-width:390px){
+ .sidebar-header{padding:10px!important}
+ .pr-top-actions{padding:7px!important}
+ .pr-pro-shop{gap:8px!important;padding:10px!important}
+ .pr-pro-shop small{line-height:1.5!important}
+ .chat-composer{gap:3px!important}
+ .pr-tool-btn{flex:0 0 31px!important;width:31px!important;height:34px!important;padding:0!important}
+ .message-bubble{max-width:90%!important;font-size:14px!important}
+}
+@media(prefers-reduced-motion:reduce){.pr-pro-shop:after{animation:none!important}}
+</style>
 <div class="tg-app">
   <div class="folder-rail">
     <div class="folder-icon active" onclick="switchFolder('all')">💬</div>
