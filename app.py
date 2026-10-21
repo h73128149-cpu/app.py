@@ -87,6 +87,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS group_invites(
           id INTEGER PRIMARY KEY, group_id INTEGER NOT NULL REFERENCES chat_groups(id),
           token TEXT UNIQUE NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS archived_chats(
+          user_id INTEGER NOT NULL REFERENCES users(id), other_id INTEGER NOT NULL REFERENCES users(id),
+          archived_at TEXT NOT NULL, PRIMARY KEY(user_id,other_id));
+        CREATE TABLE IF NOT EXISTS user_subscriptions(
+          user_id INTEGER PRIMARY KEY REFERENCES users(id), plan TEXT NOT NULL DEFAULT 'free',
+          status TEXT NOT NULL DEFAULT 'inactive', starts_at TEXT, expires_at TEXT, updated_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS message_rate_limits(
+          user_id INTEGER NOT NULL REFERENCES users(id), bucket INTEGER NOT NULL, count INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(user_id,bucket));
         """)
         # Ensure settings exist for existing accounts
         c.execute("INSERT OR IGNORE INTO user_settings(user_id) SELECT id FROM users")
@@ -206,13 +215,14 @@ def get_dialogs():
         FROM users u
         JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.receiver_id = u.id AND m.sender_id = ?)
         WHERE NOT EXISTS (SELECT 1 FROM hidden_chats h WHERE h.user_id=? AND h.other_id=u.id)
+          AND NOT EXISTS (SELECT 1 FROM archived_chats a WHERE a.user_id=? AND a.other_id=u.id)
           AND m.id IN (
             SELECT MAX(id) FROM messages 
             WHERE sender_id = ? OR receiver_id = ?
             GROUP BY CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END
         )
         ORDER BY m.id DESC
-    """, (me["id"], me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
+    """, (me["id"], me["id"], me["id"], me["id"], me["id"], me["id"], me["id"])).fetchall()
     
     dialogs = [dict(r) for r in rows]
     # Ensure Saved Messages is always present
@@ -479,6 +489,98 @@ def add_group_members(gid):
         if db().execute("SELECT 1 FROM users WHERE id=?",(uid,)).fetchone():
             db().execute("INSERT OR IGNORE INTO group_members(group_id,user_id) VALUES(?,?)",(gid,uid)); added+=1
     db().commit(); return jsonify(ok=True,added=added)
+
+
+@app.get("/api/users/contacts")
+@login_required
+def list_contacts():
+    me=current_user()
+    rows=db().execute("SELECT id,username,display_name,avatar,online,last_seen FROM users WHERE id!=? ORDER BY online DESC,display_name COLLATE NOCASE LIMIT 100",(me["id"],)).fetchall()
+    return jsonify(users=[dict(r) for r in rows])
+
+@app.get("/api/messages/search")
+@login_required
+def search_messages():
+    me=current_user(); q=str(request.args.get("q","")).strip()[:120]
+    try: other_id=int(request.args.get("other_id", "0"))
+    except (ValueError,TypeError): other_id=0
+    if len(q)<2: return jsonify(results=[])
+    like="%"+q.replace("%", "\\%").replace("_", "\\_")+"%"
+    if other_id and other_id != me["id"]:
+        sql="""SELECT m.*,u.username sender_username,u.display_name sender_name FROM messages m
+          JOIN users u ON u.id=m.sender_id WHERE ((m.sender_id=? AND m.receiver_id=?) OR (m.sender_id=? AND m.receiver_id=?))
+          AND m.deleted=0 AND m.body LIKE ? ESCAPE '\\'"""
+        params=[me["id"],other_id,other_id,me["id"],like]
+    else:
+        sql="""SELECT m.*,u.username sender_username,u.display_name sender_name FROM messages m
+          JOIN users u ON u.id=m.sender_id WHERE (m.sender_id=? OR m.receiver_id=?) AND m.deleted=0 AND m.body LIKE ? ESCAPE '\\'"""
+        params=[me["id"],me["id"],like]
+    rows=db().execute(sql+" ORDER BY m.id DESC LIMIT 50",params).fetchall()
+    return jsonify(results=[dict(r) for r in rows])
+
+@app.post("/api/messages/<int:mid>/forward")
+@login_required
+def forward_message(mid):
+    me=current_user(); data=request.get_json(silent=True) or {}
+    try: rid=int(data.get("receiver_id"))
+    except (TypeError,ValueError): return jsonify(error="مقصد نامعتبر است"),400
+    src=db().execute("SELECT * FROM messages WHERE id=? AND deleted=0 AND (sender_id=? OR receiver_id=?)",(mid,me["id"],me["id"])).fetchone()
+    if not src: return jsonify(error="پیام پیدا نشد یا دسترسی ندارید"),404
+    if rid!=me["id"] and not db().execute("SELECT id FROM users WHERE id=?",(rid,)).fetchone(): return jsonify(error="مخاطب پیدا نشد"),404
+    if rid!=me["id"] and db().execute("SELECT 1 FROM user_blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)",(me["id"],rid,rid,me["id"])).fetchone(): return jsonify(error="ارسال به این مخاطب مجاز نیست"),403
+    body=str(src["body"] or "")[:10000]
+    cur=db().execute("INSERT INTO messages(sender_id,receiver_id,body,msg_type,attachment,created_at) VALUES(?,?,?,?,?,?)",(me["id"],rid,body,src["msg_type"],src["attachment"],now()))
+    db().commit()
+    msg=dict(id=cur.lastrowid,sender_id=me["id"],receiver_id=rid,body=body,msg_type=src["msg_type"],attachment=src["attachment"],reaction="",created_at=now(),sender_username=me["username"],sender_name=me["display_name"],read_at=None,forwarded=1)
+    socketio.emit("new_message",msg,room=f"user:{rid}")
+    if rid!=me["id"]: socketio.emit("new_message",msg,room=f"user:{me['id']}")
+    return jsonify(ok=True,message=msg)
+
+@app.get("/api/chats/archived")
+@login_required
+def get_archived_chats():
+    me=current_user()
+    rows=db().execute("""SELECT u.id,u.username,u.display_name,u.avatar,u.online,a.archived_at FROM archived_chats a
+       JOIN users u ON u.id=a.other_id WHERE a.user_id=? ORDER BY a.archived_at DESC""",(me["id"],)).fetchall()
+    return jsonify(chats=[dict(r) for r in rows])
+
+@app.post("/api/chats/<int:other_id>/archive")
+@login_required
+def archive_chat(other_id):
+    me=current_user()
+    if other_id==me["id"]: return jsonify(error="پیام‌های ذخیره‌شده قابل بایگانی نیستند"),400
+    if not db().execute("SELECT id FROM users WHERE id=?",(other_id,)).fetchone(): return jsonify(error="کاربر پیدا نشد"),404
+    db().execute("INSERT OR REPLACE INTO archived_chats(user_id,other_id,archived_at) VALUES(?,?,?)",(me["id"],other_id,now()))
+    db().commit(); return jsonify(ok=True)
+
+@app.post("/api/chats/<int:other_id>/unarchive")
+@login_required
+def unarchive_chat(other_id):
+    me=current_user(); db().execute("DELETE FROM archived_chats WHERE user_id=? AND other_id=?",(me["id"],other_id)); db().commit()
+    return jsonify(ok=True)
+
+@app.get("/api/subscription")
+@login_required
+def subscription_status():
+    me=current_user(); row=db().execute("SELECT * FROM user_subscriptions WHERE user_id=?",(me["id"],)).fetchone()
+    return jsonify(subscription=dict(row) if row else {"plan":"free","status":"inactive","expires_at":None}, payment_connected=False)
+
+@app.post("/api/messages/<int:mid>/reply")
+@login_required
+def reply_message(mid):
+    me=current_user(); data=request.get_json(silent=True) or {}
+    body=str(data.get("body", "")).strip()[:10000]
+    if not body: return jsonify(error="متن پاسخ خالی است"),400
+    src=db().execute("SELECT * FROM messages WHERE id=? AND deleted=0 AND (sender_id=? OR receiver_id=?)",(mid,me["id"],me["id"])).fetchone()
+    if not src: return jsonify(error="پیام اصلی پیدا نشد"),404
+    rid=src["receiver_id"] if src["sender_id"]==me["id"] else src["sender_id"]
+    if src["sender_id"]==me["id"] and src["receiver_id"]==me["id"]: rid=me["id"]
+    cur=db().execute("INSERT INTO messages(sender_id,receiver_id,body,msg_type,reply_to,created_at) VALUES(?,?,?,?,?,?)",(me["id"],rid,body,"text",mid,now()))
+    db().commit()
+    msg=dict(id=cur.lastrowid,sender_id=me["id"],receiver_id=rid,body=body,msg_type="text",reply_to=mid,reaction="",created_at=now(),sender_username=me["username"],sender_name=me["display_name"],read_at=None)
+    socketio.emit("new_message",msg,room=f"user:{rid}")
+    if rid!=me["id"]: socketio.emit("new_message",msg,room=f"user:{me['id']}")
+    return jsonify(ok=True,message=msg)
 
 @socketio.on("connect")
 def on_connect():
@@ -1093,6 +1195,7 @@ img,video,canvas,svg{max-width:100%}
     <div class="sidebar-header">
       <div class="search-container">
         <input id="searchInput" placeholder="جستجو آیدی..." oninput="searchUsers()">
+        <div class="pr-quick-actions" style="display:flex;gap:6px;margin-top:7px"><button type="button" onclick="searchMessagesScreen()" style="flex:1;padding:7px 5px;font-size:11px;border-radius:10px;background:#292929;color:#eee;border:1px solid #ffffff12">🔎 پیام‌ها</button><button type="button" onclick="showArchivedChats()" style="flex:1;padding:7px 5px;font-size:11px;border-radius:10px;background:#292929;color:#eee;border:1px solid #ffffff12">📦 بایگانی</button></div>
       </div>
     </div>
     <div class="pr-top-actions"><button class="pr-pro-shop" type="button" onclick="openPremiumShop()"><span><b>✦ عضویت PRO MAX</b><small>استیکرهای خاص • ظاهر لوکس • قابلیت‌های ویژه</small></span><span class="pr-crown">♛</span></button></div>
@@ -1630,13 +1733,46 @@ const seenMessageIds = new Set();
 function messageMenu(m,isGroup=false) {
   const choices=[];
   choices.push(['📋 کپی متن',()=>navigator.clipboard?.writeText(m.body||'')]);
-  choices.push(['↩️ پاسخ',()=>{ $('messageInput').value='↩ '+(m.sender_name||m.sender_username||'')+': '+(m.body||'').slice(0,100)+'\n'; $('messageInput').focus(); }]);
+  choices.push(['↩️ پاسخ',()=>replyToMessage(m)]);
+  if(!isGroup) choices.push(['➡️ فوروارد پیام',()=>forwardMessage(m.id)]);
   if(!isGroup){ choices.push([m.pinned?'📌 برداشتن سنجاق':'📌 سنجاق کردن',()=>togglePinMessage(m.id)]); choices.push(['👍 واکنش',()=>reactToMessage(m.id)]); }
+  if(!isGroup && activeUser && activeUser.id!==meId) choices.push(['📦 انتقال گفتگو به بایگانی',()=>archiveActiveChat()]);
   if(!isGroup && m.sender_id===meId){ choices.push(['✏️ ویرایش',()=>editMessage(m.id,m.body||'')]); choices.push(['🗑️ حذف',()=>deleteMessage(m.id)]); }
   const html=`<h3 style="margin-bottom:12px">گزینه‌های پیام</h3>${choices.map((c,i)=>`<button onclick="runMessageChoice(${i})" style="display:block;width:100%;padding:11px;margin:6px 0;background:#172536;color:white;border:1px solid #344a64;border-radius:9px;text-align:right">${c[0]}</button>`).join('')}<button onclick="closeModal()" style="width:100%;padding:10px;background:transparent;color:#9fb2c7;border:0">بستن</button>`;
   window._messageChoices=choices; $('modalContent').innerHTML=html; $('modalOverlay').classList.remove('hidden');
 }
 function runMessageChoice(i){const c=window._messageChoices?.[i];if(c){closeModal();Promise.resolve(c[1]()).catch(()=>{});}}
+
+async function replyToMessage(m){
+ const body=await showInput('پاسخت را بنویس:', '', 'پاسخ به پیام'); if(body===null||!body.trim())return;
+ try{await api('/api/messages/'+m.id+'/reply',{method:'POST',body:JSON.stringify({body:body.trim()})});await refreshActiveChat();showToast('پاسخ ارسال شد');}
+ catch(e){showToast(e.message||'ارسال پاسخ ناموفق بود');}
+}
+async function forwardMessage(mid){
+ try{
+  const d=await api('/api/users/contacts');
+  const users=d.users||[];
+  if(!users.length){showToast('برای فوروارد، ابتدا مخاطب را از بخش مخاطبین پیدا کن.');return;}
+  $('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">FORWARD MESSAGE</div><h2>انتخاب مقصد</h2><p>پیام را برای کدام مخاطب بفرستم؟</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-contact-results">${users.map(u=>`<button class="pr-contact-row" onclick="confirmForward(${mid},${u.id})"><span class="pr-contact-avatar">${esc((u.display_name||'?').slice(0,1))}</span><span class="pr-contact-copy"><b>${esc(u.display_name)}</b><small>@${esc(u.username)}</small></span><span class="pr-contact-go">↗</span></button>`).join('')}</div>`;$('modalOverlay').classList.remove('hidden');
+ }catch(e){showToast(e.message||'فوروارد ناموفق بود');}
+}
+async function confirmForward(mid,rid){try{await api('/api/messages/'+mid+'/forward',{method:'POST',body:JSON.stringify({receiver_id:rid})});closeModal();showToast('پیام فوروارد شد');}catch(e){showToast(e.message||'فوروارد ناموفق بود');}}
+async function archiveActiveChat(){
+ if(!activeUser||activeUser.id===meId){showToast('این گفتگو قابل بایگانی نیست');return;}
+ const ok=await showConfirm('این گفتگو از فهرست اصلی خارج و به بایگانی منتقل شود؟','بایگانی گفتگو');if(!ok)return;
+ try{await api('/api/chats/'+activeUser.id+'/archive',{method:'POST'});showToast('گفتگو بایگانی شد');activeUser=null;$('chatMainPanel').classList.remove('mobile-active');await loadDialogs();}
+ catch(e){showToast(e.message||'بایگانی ناموفق بود');}
+}
+async function searchMessagesScreen(){
+ const content=`<div class="pr-screen-head"><div><div class="pr-eyebrow">MESSAGE INDEX</div><h2>جست‌وجوی پیام‌ها</h2><p>عبارت حداقل دوحرفی را وارد کن.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><input id="prMsgSearch" class="pr-search-field" placeholder="جست‌وجو در پیام‌ها..." autocomplete="off"><div id="prMsgResults" class="pr-contact-results"></div>`;
+ $('modalContent').innerHTML=content;$('modalOverlay').classList.remove('hidden');
+ $('prMsgSearch').addEventListener('input',async ev=>{const q=ev.target.value.trim(),box=$('prMsgResults');if(q.length<2){box.innerHTML='<div class="pr-empty-state">حداقل دو حرف بنویس.</div>';return;}box.innerHTML='<div class="pr-empty-state">در حال جست‌وجو…</div>';try{const d=await api('/api/messages/search?q='+encodeURIComponent(q));box.innerHTML=d.results.length?d.results.map(m=>`<button class="pr-contact-row" onclick="closeModal();openUserChat(${m.sender_id===meId?m.receiver_id:m.sender_id},'گفتگو','', '')"><span class="pr-contact-copy"><b>${esc(m.sender_name||m.sender_username||'پیام')}</b><small>${esc(m.body||'')}</small></span><span class="pr-contact-go">↗</span></button>`).join(''):'<div class="pr-empty-state">پیامی پیدا نشد.</div>';}catch(e){box.innerHTML=`<div class="pr-empty-state">${esc(e.message||'خطا در جست‌وجو')}</div>`;}});$('prMsgSearch').focus();
+}
+async function showArchivedChats(){
+ try{const d=await api('/api/chats/archived');$('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">ARCHIVE</div><h2>گفتگوهای بایگانی‌شده</h2></div><button class="pr-close-round" onclick="closeModal()">×</button></div>`+(d.chats.length?d.chats.map(c=>`<div class="pr-contact-row"><span class="pr-contact-copy"><b>${esc(c.display_name)}</b><small>@${esc(c.username)}</small></span><button style="width:auto;padding:8px 12px" onclick="unarchiveChat(${c.id})">بازگردانی</button></div>`).join(''):'<div class="pr-empty-state">بایگانی خالی است.</div>');$('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'خطا در بایگانی');}
+}
+async function unarchiveChat(id){try{await api('/api/chats/'+id+'/unarchive',{method:'POST'});await showArchivedChats();await loadDialogs();showToast('گفتگو بازگردانی شد');}catch(e){showToast(e.message||'خطا');}}
+
 async function togglePinMessage(id){try{const d=await api('/api/messages/'+id+'/pin',{method:'POST'});await refreshActiveChat();showToast(d.pinned?'پیام سنجاق شد':'سنجاق پیام برداشته شد');}catch(e){showToast(e.message);}}
 async function reactToMessage(id){const reaction=await showInput('واکنش را انتخاب کن: 👍 ❤️ 😂 😮 😢 🔥 👏 🤔','👍','واکنش به پیام');if(reaction===null)return;try{await api('/api/messages/'+id+'/react',{method:'POST',body:JSON.stringify({reaction:reaction.trim()})});await refreshActiveChat();}catch(e){showToast(e.message);}}
 function appendMessage(m, isGroup=false) {
@@ -1660,6 +1796,7 @@ function appendMessage(m, isGroup=false) {
   $('chatMessages').appendChild(el);
 }
 
+document.addEventListener('keydown', ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'){ev.preventDefault();searchMessagesScreen();}if((ev.ctrlKey||ev.metaKey)&&ev.shiftKey&&ev.key.toLowerCase()==='a'){ev.preventDefault();showArchivedChats();}});
 if ('Notification' in window && Notification.permission === 'default') {
   // Permission is requested only after the user explicitly interacts with the page.
   document.addEventListener('click', function askNotificationPermission() {
@@ -1725,3 +1862,5 @@ api('/api/settings').then(x => {applyChatBackground(x.chat_background || ''); ap
 
 if __name__ == "__main__":
     socketio.run(app, host=os.environ.get("HOST","0.0.0.0"), port=int(os.environ.get("PORT","5000")), debug=False, allow_unsafe_werkzeug=True)
+
+# Keyboard shortcuts are installed client-side in the main application template.
