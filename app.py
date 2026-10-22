@@ -32,6 +32,25 @@ def login_required(fn):
 
 @app.after_request
 def add_security_headers(response):
+    # RANGO visual refresh: add a consistent theme layer to HTML pages only.
+    if response.mimetype == "text/html":
+        try:
+            page = response.get_data(as_text=True)
+            if "id=\"rango-design-system\"" not in page and "id=\'rango-design-system\'" not in page:
+                visual_css = '<style id="rango-design-system">\n:root{--rg-bg:#10151d;--rg-panel:#18222e;--rg-panel2:#202d3b;--rg-text:#edf3fa;--rg-muted:#93a6ba;--rg-accent:#6ca9e9;--rg-accent2:#3985d5;--rg-border:rgba(148,174,201,.16);--rg-shadow:0 12px 36px rgba(0,0,0,.18)}\nhtml[data-rango-theme="light"]{--rg-bg:#f2f5f9;--rg-panel:#fff;--rg-panel2:#eaf0f6;--rg-text:#172332;--rg-muted:#63758a;--rg-accent:#287fc7;--rg-accent2:#1769ad;--rg-border:rgba(35,65,95,.14);--rg-shadow:0 12px 36px rgba(35,65,95,.08)}\nhtml,body{background-color:var(--rg-bg)!important;color:var(--rg-text)!important}body{transition:background-color .2s,color .2s}input,textarea,select{background:var(--rg-panel)!important;color:var(--rg-text)!important;border:1px solid var(--rg-border)!important;border-radius:12px!important;padding:11px 13px!important;outline:none}input:focus,textarea:focus,select:focus{border-color:var(--rg-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--rg-accent) 18%,transparent)}button,.btn,[type=submit]{border-radius:12px!important;transition:transform .15s,filter .15s;cursor:pointer}button:hover,.btn:hover,[type=submit]:hover{filter:brightness(1.08);transform:translateY(-1px)}a{color:var(--rg-accent)}img{max-width:100%} .rango-theme-toggle{position:fixed;z-index:99999;right:14px;bottom:14px;border:1px solid var(--rg-border)!important;background:var(--rg-panel)!important;color:var(--rg-text)!important;border-radius:999px!important;padding:10px 14px!important;box-shadow:var(--rg-shadow);font:600 13px system-ui;backdrop-filter:blur(12px)}\n/* Preserve page layout and behavior; style common surfaces without relying on specific page markup. */\n[style*="background:#111827"],[style*="background: #111827"],[style*="background:#1f2937"],[style*="background: #1f2937"]{background:var(--rg-panel)!important;color:var(--rg-text)!important} .card,.modal,.sidebar,.chat-list,.message-list,.settings,.panel{border-color:var(--rg-border)!important}\n</style>'
+                visual_js = '<script id="rango-theme-controller">(function(){try{var key=\'rango-theme\';var saved=localStorage.getItem(key)||\'dark\';document.documentElement.setAttribute(\'data-rango-theme\',saved);function add(){if(!document.body||document.getElementById(\'rango-theme-toggle\'))return;var b=document.createElement(\'button\');b.id=\'rango-theme-toggle\';b.className=\'rango-theme-toggle\';function paint(){var t=document.documentElement.getAttribute(\'data-rango-theme\')||\'dark\';b.textContent=t===\'dark\'?\'☀️ حالت روشن\':\'🌙 حالت تیره\';}b.onclick=function(){var t=document.documentElement.getAttribute(\'data-rango-theme\')===\'dark\'?\'light\':\'dark\';document.documentElement.setAttribute(\'data-rango-theme\',t);localStorage.setItem(key,t);paint();};paint();document.body.appendChild(b);}if(document.readyState===\'loading\')document.addEventListener(\'DOMContentLoaded\',add);else add();}catch(e){}})();</script>'
+                if "</head>" in page:
+                    page = page.replace("</head>", visual_css + "</head>", 1)
+                else:
+                    page = visual_css + page
+                if "</body>" in page:
+                    page = page.replace("</body>", visual_js + "</body>", 1)
+                else:
+                    page += visual_js
+                response.set_data(page)
+        except Exception:
+            pass
+
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
