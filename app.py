@@ -1,5 +1,5 @@
 """
-PayamRasan Pro — Fixed & Complete Telegram Clone
+Rango — Fixed & Complete Telegram Clone
 """
 import os, re, sqlite3, secrets, hashlib, hmac
 from functools import wraps
@@ -40,7 +40,51 @@ def add_security_headers(response):
 
 @app.get("/healthz")
 def healthz():
-    return jsonify(status="ok", service="PayamRasan Pro")
+    return jsonify(status="ok", service="Rango")
+
+
+# RANGO Android mandatory update configuration.
+# Change RANGO_MIN_VERSION only after the matching APK has been tested and published.
+RANGO_LATEST_VERSION = int(os.environ.get("RANGO_LATEST_VERSION", "2"))
+RANGO_MIN_VERSION = int(os.environ.get("RANGO_MIN_VERSION", "2"))
+RANGO_UPDATE_URL = os.environ.get("RANGO_UPDATE_URL", "https://t.me/PAYA_app")
+
+@app.get("/api/app-version")
+def app_version():
+    return jsonify({
+        "latest_version": RANGO_LATEST_VERSION,
+        "minimum_version": RANGO_MIN_VERSION,
+        "update_url": RANGO_UPDATE_URL,
+        "force_update": True,
+        "message": "نسخه جدید رنگو آماده است. برای ادامه، برنامه را به‌روزرسانی کنید."
+    })
+
+@app.before_request
+def enforce_rango_android_minimum_version():
+    # This blocks older official Android WebView builds. User-Agent checks are a
+    # compatibility gate, not cryptographic proof; API authorization must remain server-side.
+    ua = request.headers.get("User-Agent", "")
+    if request.endpoint == "app_version" or request.path == "/healthz":
+        return None
+    match = re.search(r"(?:RANGO|PAYA)-Android/(\d+)", ua, re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        installed = int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+    if installed < RANGO_MIN_VERSION:
+        if request.path.startswith("/api/") or request.path.startswith("/socket.io"):
+            return jsonify(error="update_required", minimum_version=RANGO_MIN_VERSION,
+                           update_url=RANGO_UPDATE_URL,
+                           message="برای ادامه، رنگو را به‌روزرسانی کنید."), 426
+        return ("<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'>"
+                "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                "<title>به‌روزرسانی رنگو</title><body style='font-family:sans-serif;"
+                "background:#111827;color:white;text-align:center;padding:3rem'>"
+                "<h2>نسخه جدید رنگو لازم است</h2><p>برای ادامه، برنامه را به‌روزرسانی کنید.</p>"
+                f"<a style='color:#93c5fd' href='{RANGO_UPDATE_URL}'>رفتن به کانال آپدیت</a>"
+                "</body></html>", 426, {"Content-Type": "text/html; charset=utf-8"})
 
 def db():
     if "db" not in g:
@@ -938,7 +982,7 @@ select, input, textarea { accent-color:var(--accent); }
   .action-btn { font-size: 20px; padding: 5px; }
   .modal-card { padding: 18px; max-height: 86dvh; }
 }
-/* PayamRasan signature theme: Telegram-like desktop layout with a richer neon finish */
+/* Rango signature theme: Telegram-like desktop layout with a richer neon finish */
 :root {
   --bg-main:#0b111b; --panel-bg:#111c2b; --panel-hover:#1b2a3d;
   --active-bg:#24496d; --accent:#43c6ff; --bubble-out:#245a83;
@@ -1088,7 +1132,7 @@ body[data-theme="light"] .search-container,body[data-theme="light"] .composer-in
 
 
 
-/* ═══════════ PAYAMRASAN: CINEMATIC ULTRA VISUAL EXPERIENCE ═══════════ */
+/* ═══════════ RANGO: CINEMATIC ULTRA VISUAL EXPERIENCE ═══════════ */
 :root{
  --pr-white:#f8f8f8;--pr-silver:#bfc3c7;--pr-line:rgba(255,255,255,.105);
  --pr-glass:rgba(17,17,17,.82);--pr-glow:rgba(255,255,255,.12);
@@ -1313,7 +1357,7 @@ img,video,canvas,svg{max-width:100%}
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 17px 4px;background:linear-gradient(135deg,#14253a,#101a29);">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
         <div style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#43c6ff,#635bff);box-shadow:0 5px 18px #43c6ff30;font-size:20px;">✦</div>
-        <div><div style="font-weight:800;letter-spacing:.2px;font-size:15px;">PayamRasan <span style="color:#43c6ff">Pro</span></div><div style="font-size:10px;color:#91a8c0;">PRIVATE MESSENGER · <span style="color:#ddd">✦ PRO</span></div></div>
+        <div><div style="font-weight:800;letter-spacing:.2px;font-size:15px;">Rango <span style="color:#43c6ff">Pro</span></div><div style="font-size:10px;color:#91a8c0;">PRIVATE MESSENGER · <span style="color:#ddd">✦ PRO</span></div></div>
       </div>
       <button type="button" title="حساب فعلی و مدیریت حساب‌ها" onclick="accountInfo()" style="border:1px solid #30465f;background:#0b1421;color:#a9c9e8;border-radius:11px;padding:8px 10px;cursor:pointer;">👤 حساب</button>
     </div>
@@ -1405,7 +1449,7 @@ async function searchContactsScreen(){const q=$('prContactsSearch')?.value.trim(
 const PR_PROFILE_COLORS=['#30251f','#452b3a','#26354f','#173f3a','#56352a','#4a3d70','#5b2630','#3d4148','#6b4c2a','#244a66','#36523b','#171717'];
 function renderProfileColors(selected){return PR_PROFILE_COLORS.map(c=>`<button class="pr-color-swatch ${c.toLowerCase()===String(selected).toLowerCase()?'selected':''}" style="background:${c}" title="${c}" aria-label="انتخاب رنگ ${c}" onclick="saveProfileColor('${c}')"></button>`).join('')}
 async function saveProfileColor(color){try{const d=await api('/api/settings');await api('/api/settings',{method:'POST',body:JSON.stringify({...d,profile_color:color})});const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${color}aa,transparent 58%),linear-gradient(145deg,${color},#111 82%)`;const grid=$('profileColorGrid');if(grid)grid.innerHTML=renderProfileColors(color);showToast('رنگ پس‌زمینهٔ پروفایل ذخیره شد 🎨')}catch(e){showToast(e.message||'ذخیره رنگ انجام نشد')}}
-async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}${prAdminBadge(u.username)}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button><button onclick="closeModal();openAdminPanel()"><span>🛡️</span>پنل ادمین</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
+async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · RANGO</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}${prAdminBadge(u.username)}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button><button onclick="closeModal();openAdminPanel()"><span>🛡️</span>پنل ادمین</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
 
 const meId = {{me['id']}};
 let activeUser = null;
@@ -1590,7 +1634,7 @@ const PR_STICKERS = [['😎','خفن'],['👑','سلطان'],['🖤','دارک']
 function openEmojiPicker(tab='emoji'){
  const emojiHtml=()=>`<div class="pr-emoji-grid">${PR_EMOJIS.map(x=>`<button type="button" onclick="insertPRToken('${x}')">${x}</button>`).join('')}</div>`;
  const stickerHtml=()=>`<div class="pr-sticker-grid">${PR_STICKERS.map(x=>`<button class="pr-sticker" type="button" onclick="sendPRSticker('${x[0]}','${x[1]}')">${x[0]}<small>${x[1]}</small></button>`).join('')}</div><p style="font-size:10px;color:#888;line-height:1.8;margin-top:12px">این بستهٔ استیکر فعلاً با ایموجی‌های بزرگ ارسال می‌شود؛ برای استیکرهای تصویری واقعی باید فایل‌های استیکر به سرور اضافه شوند.</p>`;
- $('modalContent').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between"><div><h3>ایموجی و استیکر</h3><p style="font-size:11px;color:#999;margin-top:5px">حالتت رو با یه واکنش نشون بده ✨</p></div><span class="pr-badge">PAYAMR PRO</span></div><div class="pr-picker-tabs"><button id="prEmojiTab" class="${tab==='emoji'?'active':''}" onclick="switchPRPicker('emoji')">😊 ایموجی</button><button id="prStickerTab" class="${tab==='sticker'?'active':''}" onclick="switchPRPicker('sticker')">🧸 استیکر</button></div><div id="prPickerBody">${tab==='emoji'?emojiHtml():stickerHtml()}</div><button onclick="closeModal()" style="width:100%;padding:10px;border:1px solid #333;border-radius:12px;background:#111;color:#ddd;margin-top:12px">بستن</button>`;
+ $('modalContent').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between"><div><h3>ایموجی و استیکر</h3><p style="font-size:11px;color:#999;margin-top:5px">حالتت رو با یه واکنش نشون بده ✨</p></div><span class="pr-badge">RANGO PRO</span></div><div class="pr-picker-tabs"><button id="prEmojiTab" class="${tab==='emoji'?'active':''}" onclick="switchPRPicker('emoji')">😊 ایموجی</button><button id="prStickerTab" class="${tab==='sticker'?'active':''}" onclick="switchPRPicker('sticker')">🧸 استیکر</button></div><div id="prPickerBody">${tab==='emoji'?emojiHtml():stickerHtml()}</div><button onclick="closeModal()" style="width:100%;padding:10px;border:1px solid #333;border-radius:12px;background:#111;color:#ddd;margin-top:12px">بستن</button>`;
  window.prEmojiHtml=emojiHtml;window.prStickerHtml=stickerHtml;$('modalOverlay').classList.remove('hidden');
 }
 function switchPRPicker(tab){$('prEmojiTab').classList.toggle('active',tab==='emoji');$('prStickerTab').classList.toggle('active',tab==='sticker');$('prPickerBody').innerHTML=tab==='emoji'?window.prEmojiHtml():window.prStickerHtml();}
@@ -1609,11 +1653,11 @@ async function sendPRSticker(emoji,label){
 }
 function openPremiumShop(){
  const isDemo=localStorage.getItem('pr_demo_premium')==='1';
- $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">PAYAMRASAN • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">۵۰٬۰۰۰ تومان</div><p>اشتراک یک‌ماههٔ PRO؛ درخواست خرید را برای ادمین تلگرام بفرست.</p><button class="secondary" onclick="requestProPurchase()">🛒 درخواست خرید اشتراک</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">۵۰٬۰۰۰ تومان / ماه</div><p>پس از بررسی واریز، ادمین اشتراک را فعال می‌کند.</p><button onclick="requestProPurchase()">👑 خرید PRO MAX</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">پرداخت مستقیم در سایت انجام نمی‌شود. با زدن دکمه، پیام آماده در تلگرام باز می‌شود؛ پس از بررسی پرداخت، ادمین اشتراک را فعال می‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
+ $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">RANGO • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">۵۰٬۰۰۰ تومان</div><p>اشتراک یک‌ماههٔ PRO؛ درخواست خرید را برای ادمین تلگرام بفرست.</p><button class="secondary" onclick="requestProPurchase()">🛒 درخواست خرید اشتراک</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">۵۰٬۰۰۰ تومان / ماه</div><p>پس از بررسی واریز، ادمین اشتراک را فعال می‌کند.</p><button onclick="requestProPurchase()">👑 خرید PRO MAX</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">پرداخت مستقیم در سایت انجام نمی‌شود. با زدن دکمه، پیام آماده در تلگرام باز می‌شود؛ پس از بررسی پرداخت، ادمین اشتراک را فعال می‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
  $('modalOverlay').classList.remove('hidden');
 }
 async function requestProPurchase(){
- try{const me=await api('/api/me');const msg=`سلام، درخواست خرید اشتراک PayamRasan Pro دارم.\nآیدی: @${me.username}\nمبلغ: ۵۰٬۰۰۰ تومان\nمدت: یک ماه\nلطفاً اطلاعات پرداخت را ارسال کنید.`;const admin=(window.PR_ADMIN_TELEGRAM_USERNAME||'YOUR_TELEGRAM_USERNAME').replace(/^@/,'');if(!admin||admin==='YOUR_TELEGRAM_USERNAME'){showToast('ابتدا ADMIN_TELEGRAM_USERNAME را در تنظیمات سرور روی آیدی تلگرام خودت تنظیم کن.');return;}window.location.href=`https://t.me/${encodeURIComponent(admin)}?text=${encodeURIComponent(msg)}`;}catch(e){showToast(e.message||'بازکردن درخواست خرید ناموفق بود');}
+ try{const me=await api('/api/me');const msg=`سلام، درخواست خرید اشتراک Rango دارم.\nآیدی: @${me.username}\nمبلغ: ۵۰٬۰۰۰ تومان\nمدت: یک ماه\nلطفاً اطلاعات پرداخت را ارسال کنید.`;const admin=(window.PR_ADMIN_TELEGRAM_USERNAME||'YOUR_TELEGRAM_USERNAME').replace(/^@/,'');if(!admin||admin==='YOUR_TELEGRAM_USERNAME'){showToast('ابتدا ADMIN_TELEGRAM_USERNAME را در تنظیمات سرور روی آیدی تلگرام خودت تنظیم کن.');return;}window.location.href=`https://t.me/${encodeURIComponent(admin)}?text=${encodeURIComponent(msg)}`;}catch(e){showToast(e.message||'بازکردن درخواست خرید ناموفق بود');}
 }
 async function openStories(){
  try{const d=await api('/api/stories');const me=await api('/api/me');const list=d.stories.map(s=>`<article class="pr-story-card"><b>${esc(s.display_name||s.username)}</b> <small>@${esc(s.username)} · ${new Date(s.created_at).toLocaleString()}</small>${s.media_url?`<p><a href="${esc(s.media_url)}" target="_blank" rel="noopener">🖼️ مشاهدهٔ رسانه</a></p>`:''}<p style="white-space:pre-wrap">${esc(s.body||'')}</p>${s.user_id===me.id?`<button onclick="deleteStory(${s.id})">🗑️ حذف استوری من</button>`:''}</article>`).join('');$('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">STORIES · 24 HOURS</div><h2>استوری‌ها ✨</h2><p>استوری‌ها پس از ۲۴ ساعت منقضی می‌شوند.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-admin-panel"><textarea id="prStoryText" maxlength="500" placeholder="چی می‌خوای به اشتراک بذاری؟" style="width:100%;box-sizing:border-box;min-height:90px;background:#111;color:#fff;border:1px solid #ffffff20;border-radius:12px;padding:12px"></textarea><input id="prStoryMedia" placeholder="لینک تصویر/ویدئو (اختیاری)" style="width:100%;box-sizing:border-box;padding:11px;background:#111;color:#fff;border:1px solid #ffffff20;border-radius:10px;margin-top:8px"><button onclick="publishStory()" style="margin-top:8px;padding:11px 15px;border:0;border-radius:11px;background:linear-gradient(135deg,#b49a82,#6c5544);color:#fff;font-weight:800">＋ انتشار استوری</button></div><h3>استوری‌های اخیر</h3>${list||'<div class="pr-empty-state">هنوز استوری‌ای منتشر نشده.</div>'}`;$('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری استوری‌ها ناموفق بود')}
@@ -1872,7 +1916,7 @@ function applyLanguage(lang) {
   document.body.dir=document.documentElement.dir;
   const en=lang==='en';
   const search=$('searchInput'); if(search) search.placeholder=en?'Search username...':'جستجو آیدی...';
-  const title=$('chatTitle'); if(title && !activeUser && !activeGroup) title.textContent=en?'PayamRasan Pro':'تلگرام پرو';
+  const title=$('chatTitle'); if(title && !activeUser && !activeGroup) title.textContent=en?'Rango':'تلگرام پرو';
   const status=$('chatStatus'); if(status && !activeUser && !activeGroup) status.textContent=en?'Select a chat':'انتخاب گفتگو';
   const input=$('messageInput'); if(input) input.placeholder=en?'Write a message...':'نوشتن پیام...';
   const settingsBtn=document.querySelector('.folder-icon[onclick="openAppSettings()"]'); if(settingsBtn) settingsBtn.title=en?'Settings and themes':'تنظیمات و تم‌ها';
