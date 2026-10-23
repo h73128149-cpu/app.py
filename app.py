@@ -1,5 +1,5 @@
 """
-Rango — Fixed & Complete Telegram Clone
+PayamRasan Pro — Fixed & Complete Telegram Clone
 """
 import os, re, sqlite3, secrets, hashlib, hmac
 from functools import wraps
@@ -32,25 +32,6 @@ def login_required(fn):
 
 @app.after_request
 def add_security_headers(response):
-    # RANGO visual refresh: add a consistent theme layer to HTML pages only.
-    if response.mimetype == "text/html":
-        try:
-            page = response.get_data(as_text=True)
-            if "id=\"rango-design-system\"" not in page and "id=\'rango-design-system\'" not in page:
-                visual_css = '<style id="rango-design-system">\n:root{--rg-bg:#10151d;--rg-panel:#18222e;--rg-panel2:#202d3b;--rg-text:#edf3fa;--rg-muted:#93a6ba;--rg-accent:#6ca9e9;--rg-accent2:#3985d5;--rg-border:rgba(148,174,201,.16);--rg-shadow:0 12px 36px rgba(0,0,0,.18)}\nhtml[data-rango-theme="light"]{--rg-bg:#f2f5f9;--rg-panel:#fff;--rg-panel2:#eaf0f6;--rg-text:#172332;--rg-muted:#63758a;--rg-accent:#287fc7;--rg-accent2:#1769ad;--rg-border:rgba(35,65,95,.14);--rg-shadow:0 12px 36px rgba(35,65,95,.08)}\nhtml,body{background-color:var(--rg-bg)!important;color:var(--rg-text)!important}body{transition:background-color .2s,color .2s}input,textarea,select{background:var(--rg-panel)!important;color:var(--rg-text)!important;border:1px solid var(--rg-border)!important;border-radius:12px!important;padding:11px 13px!important;outline:none}input:focus,textarea:focus,select:focus{border-color:var(--rg-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--rg-accent) 18%,transparent)}button,.btn,[type=submit]{border-radius:12px!important;transition:transform .15s,filter .15s;cursor:pointer}button:hover,.btn:hover,[type=submit]:hover{filter:brightness(1.08);transform:translateY(-1px)}a{color:var(--rg-accent)}img{max-width:100%} .rango-theme-toggle{position:fixed;z-index:99999;right:14px;bottom:14px;border:1px solid var(--rg-border)!important;background:var(--rg-panel)!important;color:var(--rg-text)!important;border-radius:999px!important;padding:10px 14px!important;box-shadow:var(--rg-shadow);font:600 13px system-ui;backdrop-filter:blur(12px)}\n/* Preserve page layout and behavior; style common surfaces without relying on specific page markup. */\n[style*="background:#111827"],[style*="background: #111827"],[style*="background:#1f2937"],[style*="background: #1f2937"]{background:var(--rg-panel)!important;color:var(--rg-text)!important} .card,.modal,.sidebar,.chat-list,.message-list,.settings,.panel{border-color:var(--rg-border)!important}\n</style>'
-                visual_js = '<script id="rango-theme-controller">(function(){try{var key=\'rango-theme\';var saved=localStorage.getItem(key)||\'dark\';document.documentElement.setAttribute(\'data-rango-theme\',saved);function add(){if(!document.body||document.getElementById(\'rango-theme-toggle\'))return;var b=document.createElement(\'button\');b.id=\'rango-theme-toggle\';b.className=\'rango-theme-toggle\';function paint(){var t=document.documentElement.getAttribute(\'data-rango-theme\')||\'dark\';b.textContent=t===\'dark\'?\'☀️ حالت روشن\':\'🌙 حالت تیره\';}b.onclick=function(){var t=document.documentElement.getAttribute(\'data-rango-theme\')===\'dark\'?\'light\':\'dark\';document.documentElement.setAttribute(\'data-rango-theme\',t);localStorage.setItem(key,t);paint();};paint();document.body.appendChild(b);}if(document.readyState===\'loading\')document.addEventListener(\'DOMContentLoaded\',add);else add();}catch(e){}})();</script>'
-                if "</head>" in page:
-                    page = page.replace("</head>", visual_css + "</head>", 1)
-                else:
-                    page = visual_css + page
-                if "</body>" in page:
-                    page = page.replace("</body>", visual_js + "</body>", 1)
-                else:
-                    page += visual_js
-                response.set_data(page)
-        except Exception:
-            pass
-
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -59,51 +40,7 @@ def add_security_headers(response):
 
 @app.get("/healthz")
 def healthz():
-    return jsonify(status="ok", service="Rango")
-
-
-# RANGO Android mandatory update configuration.
-# Change RANGO_MIN_VERSION only after the matching APK has been tested and published.
-RANGO_LATEST_VERSION = int(os.environ.get("RANGO_LATEST_VERSION", "2"))
-RANGO_MIN_VERSION = int(os.environ.get("RANGO_MIN_VERSION", "2"))
-RANGO_UPDATE_URL = os.environ.get("RANGO_UPDATE_URL", "https://t.me/PAYA_app")
-
-@app.get("/api/app-version")
-def app_version():
-    return jsonify({
-        "latest_version": RANGO_LATEST_VERSION,
-        "minimum_version": RANGO_MIN_VERSION,
-        "update_url": RANGO_UPDATE_URL,
-        "force_update": True,
-        "message": "نسخه جدید رنگو آماده است. برای ادامه، برنامه را به‌روزرسانی کنید."
-    })
-
-@app.before_request
-def enforce_rango_android_minimum_version():
-    # This blocks older official Android WebView builds. User-Agent checks are a
-    # compatibility gate, not cryptographic proof; API authorization must remain server-side.
-    ua = request.headers.get("User-Agent", "")
-    if request.endpoint == "app_version" or request.path == "/healthz":
-        return None
-    match = re.search(r"(?:RANGO|PAYA)-Android/(\d+)", ua, re.IGNORECASE)
-    if not match:
-        return None
-    try:
-        installed = int(match.group(1))
-    except (TypeError, ValueError):
-        return None
-    if installed < RANGO_MIN_VERSION:
-        if request.path.startswith("/api/") or request.path.startswith("/socket.io"):
-            return jsonify(error="update_required", minimum_version=RANGO_MIN_VERSION,
-                           update_url=RANGO_UPDATE_URL,
-                           message="برای ادامه، رنگو را به‌روزرسانی کنید."), 426
-        return ("<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'>"
-                "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                "<title>به‌روزرسانی رنگو</title><body style='font-family:sans-serif;"
-                "background:#111827;color:white;text-align:center;padding:3rem'>"
-                "<h2>نسخه جدید رنگو لازم است</h2><p>برای ادامه، برنامه را به‌روزرسانی کنید.</p>"
-                f"<a style='color:#93c5fd' href='{RANGO_UPDATE_URL}'>رفتن به کانال آپدیت</a>"
-                "</body></html>", 426, {"Content-Type": "text/html; charset=utf-8"})
+    return jsonify(status="ok", service="PayamRasan Pro")
 
 def db():
     if "db" not in g:
@@ -888,6 +825,21 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-even
 @keyframes authPulse{50%{opacity:.4;box-shadow:0 0 3px #fff}}@keyframes authShine{0%,100%{background-position:0 0}50%{background-position:100% 0}}
 @media(max-width:420px){.auth-benefits{gap:5px}.auth-benefits span{font-size:9px;padding:6px 7px}}
 </style>
+<style id="rango-auth-redesign">
+body{background:radial-gradient(ellipse at 12% 12%,#30485a 0,transparent 38%),radial-gradient(ellipse at 90% 85%,#49332f 0,transparent 34%),#0b1118!important;color:#edf4f8!important;padding:22px!important}
+.auth-card{width:min(470px,100%)!important;padding:clamp(28px,5vw,44px)!important;border-radius:30px!important;text-align:right!important;background:linear-gradient(150deg,#1b2936f5,#111923f7)!important;border:1px solid #d9e8f018!important;box-shadow:0 30px 90px #0009!important;overflow:hidden;position:relative;animation:rangoAuthIn .35s ease-out both}
+.auth-card:after{content:"RANGO  ·  PRIVATE MESSAGING";display:block;margin-top:25px;padding-top:17px;border-top:1px solid #ffffff15;color:#8ea6b7;font-size:10px;letter-spacing:1.6px;text-align:center;direction:ltr}
+.auth-card:before{content:"R"!important;display:grid;place-items:center;width:66px;height:66px;margin:0 0 23px auto;border-radius:22px;background:linear-gradient(145deg,#e7aa91,#9acde0);color:#15232e;font-size:29px;font-weight:950;box-shadow:0 12px 30px #0004;transform:none!important}
+.auth-card h2{font-size:clamp(24px,4vw,31px)!important;line-height:1.5;color:#f3f7fa!important;letter-spacing:-.5px}
+.auth-card h2:after{content:"ورود به فضای گفت‌وگوی رنگو";display:block;margin-top:5px;color:#a7bbc9;font-size:12px;font-weight:400;letter-spacing:0}
+.auth-card p,.auth-lead{color:#a5b8c6!important;line-height:1.9}
+.auth-card input{height:54px!important;padding:0 16px!important;border-radius:15px!important;background:#0c141d!important;border:1px solid #354757!important;color:#f4f8fa!important;transition:.2s}
+.auth-card input:focus{border-color:#9acde0!important;box-shadow:0 0 0 4px #9acde022!important}
+.auth-card button,.auth-card .auth-submit{min-height:52px;border-radius:15px!important;background:linear-gradient(110deg,#e6a58e,#a3d0e1)!important;color:#17232d!important;font-weight:850;box-shadow:0 10px 26px #0003!important}
+.auth-card a,.auth-switch a{color:#b6dfee!important}.error{border-radius:13px!important;background:#6d293544!important;border:1px solid #c36d7344!important}
+@keyframes rangoAuthIn{from{opacity:0;transform:translateY(15px) scale(.985)}to{opacity:1;transform:none}}
+@media(max-width:480px){body{padding:14px!important}.auth-card{border-radius:24px!important;padding:28px 22px!important}}
+</style>
 </head>
 <body>
 <div class="auth-card">
@@ -1001,7 +953,7 @@ select, input, textarea { accent-color:var(--accent); }
   .action-btn { font-size: 20px; padding: 5px; }
   .modal-card { padding: 18px; max-height: 86dvh; }
 }
-/* Rango signature theme: Telegram-like desktop layout with a richer neon finish */
+/* PayamRasan signature theme: Telegram-like desktop layout with a richer neon finish */
 :root {
   --bg-main:#0b111b; --panel-bg:#111c2b; --panel-hover:#1b2a3d;
   --active-bg:#24496d; --accent:#43c6ff; --bubble-out:#245a83;
@@ -1151,7 +1103,7 @@ body[data-theme="light"] .search-container,body[data-theme="light"] .composer-in
 
 
 
-/* ═══════════ RANGO: CINEMATIC ULTRA VISUAL EXPERIENCE ═══════════ */
+/* ═══════════ PAYAMRASAN: CINEMATIC ULTRA VISUAL EXPERIENCE ═══════════ */
 :root{
  --pr-white:#f8f8f8;--pr-silver:#bfc3c7;--pr-line:rgba(255,255,255,.105);
  --pr-glass:rgba(17,17,17,.82);--pr-glow:rgba(255,255,255,.12);
@@ -1364,6 +1316,57 @@ img,video,canvas,svg{max-width:100%}
 .chat-row.pr-pinned:after{content:'📌';position:absolute;left:12px;bottom:8px;font-size:11px;opacity:.85}
 
 </style>
+<style id="rango-full-redesign">
+:root{--rango-blue:#9fd0e2;--rango-coral:#e6a58e}
+body{background:radial-gradient(ellipse at 70% 0,#182c3a 0,transparent 48%),#0b121a;color:#edf4f8}
+.folder-rail{background:#0d151e!important;border-color:#293947!important}
+.folder-icon{border-radius:15px;transition:transform .18s,background .18s}
+.folder-icon:hover{transform:translateY(-2px)}
+.sidebar{background:rgba(18,29,40,.98)!important;border-color:#293b4b!important}
+.sidebar>div:first-child{background:linear-gradient(125deg,#1a2a38,#131f2b)!important;border-color:#293b4b!important;padding:15px 16px!important}
+.sidebar-brand,.rango-brand{display:flex;align-items:center;gap:11px;min-width:0}
+.rango-logo-mark{width:40px;height:40px;flex:0 0 40px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,var(--rango-coral),var(--rango-blue));color:#15222c;font-size:21px;font-weight:950;box-shadow:0 7px 20px #0003}
+.rango-wordmark{font-size:17px;font-weight:900;letter-spacing:1px;color:#f0f6f9}.rango-tagline{font-size:10px;color:#9db2c1;margin-top:2px}
+.sidebar-header{background:#14212d!important;padding:14px 15px!important}
+.search-container{background:#0d1721!important;border:1px solid #2b4050!important;border-radius:15px!important;height:45px!important}
+.search-container:focus-within{border-color:#9fd0e2!important;box-shadow:0 0 0 3px #9fd0e21c!important}
+.search-container input{color:#edf5f8!important}
+.chat-list{padding:8px!important}
+.chat-row{border-radius:16px!important;border-bottom:1px solid #ffffff06!important;margin:3px 0;padding:12px 13px!important;transition:background .15s,transform .15s!important}
+.chat-row:hover{background:#223442!important;transform:translateX(-1px)}
+.chat-row.active{background:linear-gradient(105deg,#294355,#213342)!important;box-shadow:inset -3px 0 var(--rango-blue)!important}
+.avatar{border:1px solid #ffffff16!important;box-shadow:0 5px 14px #0002}
+.chat-main{background:radial-gradient(ellipse at 50% 0,#172a38 0,transparent 46%),#0d151e!important}
+.chat-topbar{background:rgba(19,31,43,.97)!important;border-color:#293b4b!important;box-shadow:0 4px 20px #0002}
+.chat-messages{background-image:radial-gradient(#a5c8d408 1px,transparent 1px)!important;background-size:19px 19px!important}
+.message-bubble{border:1px solid #ffffff0b!important;border-radius:17px!important;box-shadow:0 5px 14px #00012!important;line-height:1.75}
+.message-bubble.mine{background:linear-gradient(140deg,#35576b,#294557)!important;border-bottom-right-radius:5px!important}
+.message-bubble:not(.mine){background:#1a2936!important;border-bottom-left-radius:5px!important}
+.chat-composer{background:rgba(19,31,43,.98)!important;border-color:#293b4b!important;padding:12px 15px!important}
+.composer-input{background:#0d1721!important;border:1px solid #2b4050!important;border-radius:16px!important;color:#edf5f8!important}
+.composer-input:focus{border-color:#9fd0e277!important}
+.action-btn{transition:background .15s,transform .15s;color:#a8c8d7!important}.action-btn:hover{background:#263c4c!important;transform:scale(1.04)}
+.modal-card{background:linear-gradient(145deg,#1a2a38,#121e29)!important;border:1px solid #34495a!important;border-radius:24px!important;box-shadow:0 24px 80px #0009!important}
+.rango-menu-wrap{position:relative;flex:0 0 auto}.rango-menu-trigger{width:39px;height:39px;border-radius:13px;border:1px solid #344858;background:#0e1923;color:#dbeaf1;font-size:23px;line-height:1;cursor:pointer}
+.rango-menu{position:absolute;left:0;top:47px;width:232px;padding:8px;border-radius:17px;background:#1a2936;border:1px solid #34495a;box-shadow:0 18px 55px #000a;z-index:100001;animation:rangoMenuIn .14s ease-out}
+.rango-menu button{display:flex;align-items:center;gap:11px;width:100%;padding:12px;border:0;border-radius:11px;background:transparent;color:#eaf2f6;text-align:right;font:inherit;font-size:13px;cursor:pointer}
+.rango-menu button:hover{background:#2a4051}.rango-menu .rango-menu-divider{height:1px;background:#344858;margin:5px 4px}
+@keyframes rangoMenuIn{from{opacity:0;transform:translateY(5px) scale(.98)}to{opacity:1;transform:none}}
+body[data-theme="light"]{background:#edf3f7!important;color:#203342!important}
+body[data-theme="light"] .folder-rail{background:#f7fafc!important}
+body[data-theme="light"] .sidebar,body[data-theme="light"] .sidebar>div:first-child,body[data-theme="light"] .sidebar-header,body[data-theme="light"] .chat-topbar,body[data-theme="light"] .chat-composer{background:#fff!important;color:#203342!important;border-color:#d8e3eb!important}
+body[data-theme="light"] .chat-main{background:radial-gradient(ellipse at 50% 0,#e2edf4 0,transparent 48%),#edf3f7!important}
+body[data-theme="light"] .chat-messages{background-color:#edf3f7!important;background-image:radial-gradient(#70899b13 1px,transparent 1px)!important}
+body[data-theme="light"] .search-container,body[data-theme="light"] .composer-input,body[data-theme="light"] .rango-menu-trigger{background:#f2f6f9!important;color:#203342!important;border-color:#d7e2e9!important}
+body[data-theme="light"] .search-container input,body[data-theme="light"] .composer-input{color:#203342!important}
+body[data-theme="light"] .chat-row:hover{background:#edf3f7!important}body[data-theme="light"] .chat-row.active{background:#dfedf4!important}
+body[data-theme="light"] .message-bubble.mine{background:#d2e8f2!important;color:#203342!important}body[data-theme="light"] .message-bubble:not(.mine){background:#fff!important;color:#203342!important}
+body[data-theme="light"] .msg-time{color:#6c8291!important}
+body[data-theme="light"] .modal-card,body[data-theme="light"] .rango-menu{background:#fff!important;color:#203342!important;border-color:#d7e2e9!important}
+body[data-theme="light"] .rango-menu button{color:#203342!important}body[data-theme="light"] .rango-menu button:hover{background:#edf3f7!important}
+body[data-theme="light"] .chat-title,body[data-theme="light"] #chatTitle{color:#203342!important}
+@media(max-width:768px){.sidebar{box-shadow:-12px 0 40px #0002}.chat-topbar{height:60px!important}.chat-composer{padding:9px!important;gap:6px!important}.rango-menu{left:0;right:auto}}
+</style>
 
 <div class="tg-app">
   <div class="folder-rail">
@@ -1375,10 +1378,18 @@ img,video,canvas,svg{max-width:100%}
   <aside class="sidebar" id="sidebarPanel">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 17px 4px;background:linear-gradient(135deg,#14253a,#101a29);">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-        <div style="width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#43c6ff,#635bff);box-shadow:0 5px 18px #43c6ff30;font-size:20px;">✦</div>
-        <div><div style="font-weight:800;letter-spacing:.2px;font-size:15px;">Rango <span style="color:#43c6ff">Pro</span></div><div style="font-size:10px;color:#91a8c0;">PRIVATE MESSENGER · <span style="color:#ddd">✦ PRO</span></div></div>
+        <div class="rango-logo-mark">R</div>
+        <div><div class="rango-wordmark">RANGO</div><div class="rango-tagline">گفت‌وگوی متفاوت، نزدیک‌تر</div></div>
       </div>
-      <button type="button" title="حساب فعلی و مدیریت حساب‌ها" onclick="accountInfo()" style="border:1px solid #30465f;background:#0b1421;color:#a9c9e8;border-radius:11px;padding:8px 10px;cursor:pointer;">👤 حساب</button>
+      <div class="rango-menu-wrap"><button type="button" class="rango-menu-trigger" id="rangoMenuTrigger" title="منوی بیشتر" aria-label="منوی بیشتر" onclick="toggleRangoMenu(event)">⋮</button>
+        <div class="rango-menu hidden" id="rangoMainMenu">
+          <button type="button" onclick="openSavedMessagesRango()"><span>🔖</span><span>پیام‌های ذخیره‌شده</span></button>
+          <button type="button" onclick="toggleRangoTheme()"><span id="rangoThemeIcon">☀️</span><span id="rangoThemeLabel">حالت روشن</span></button>
+          <div class="rango-menu-divider"></div>
+          <button type="button" onclick="accountInfo();closeRangoMenu()"><span>👤</span><span>حساب کاربری</span></button>
+          <button type="button" onclick="openAppSettings();closeRangoMenu()"><span>⚙️</span><span>تنظیمات</span></button>
+        </div>
+      </div>
     </div>
     <div class="sidebar-header">
       <div class="search-container">
@@ -1396,7 +1407,7 @@ img,video,canvas,svg{max-width:100%}
         <button class="back-btn-mobile" onclick="closeChatMobile(event)">⬅</button>
         <div class="avatar" id="activeAvatar" style="width:40px; height:40px;">💬</div>
         <div>
-          <div style="font-size:15px; font-weight:700;" id="chatTitle">تلگرام پرو</div>
+          <div style="font-size:15px; font-weight:700;" id="chatTitle">RANGO</div>
           <div style="font-size:12px; color: var(--text-muted);" id="chatStatus">انتخاب گفتگو</div>
         </div>
       </div>
@@ -1468,7 +1479,7 @@ async function searchContactsScreen(){const q=$('prContactsSearch')?.value.trim(
 const PR_PROFILE_COLORS=['#30251f','#452b3a','#26354f','#173f3a','#56352a','#4a3d70','#5b2630','#3d4148','#6b4c2a','#244a66','#36523b','#171717'];
 function renderProfileColors(selected){return PR_PROFILE_COLORS.map(c=>`<button class="pr-color-swatch ${c.toLowerCase()===String(selected).toLowerCase()?'selected':''}" style="background:${c}" title="${c}" aria-label="انتخاب رنگ ${c}" onclick="saveProfileColor('${c}')"></button>`).join('')}
 async function saveProfileColor(color){try{const d=await api('/api/settings');await api('/api/settings',{method:'POST',body:JSON.stringify({...d,profile_color:color})});const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${color}aa,transparent 58%),linear-gradient(145deg,${color},#111 82%)`;const grid=$('profileColorGrid');if(grid)grid.innerHTML=renderProfileColors(color);showToast('رنگ پس‌زمینهٔ پروفایل ذخیره شد 🎨')}catch(e){showToast(e.message||'ذخیره رنگ انجام نشد')}}
-async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · RANGO</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}${prAdminBadge(u.username)}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button><button onclick="closeModal();openAdminPanel()"><span>🛡️</span>پنل ادمین</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
+async function openProfileScreen(){try{const u=await api('/api/me');const avatar=u.avatar?`background-image:url('${esc(u.avatar)}');background-size:cover;background-position:center;`:'';const name=esc(u.display_name||u.username||'کاربر');$('modalContent').innerHTML=`<div class="pr-profile-hero"><div class="pr-profile-top"><span class="pr-eyebrow">YOUR SPACE · PAYAMRASAN</span><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-profile-avatar" style="${avatar}">${u.avatar?'':'✦'}</div><h2>${name}${prAdminBadge(u.username)}</h2><div class="pr-profile-handle">@${esc(u.username||'')}</div><span class="pr-online-pill"><i></i> حساب فعال</span><div class="pr-profile-actions"><button onclick="closeModal();openProfileModal()"><span>📷</span>ویرایش اطلاعات</button><button onclick="closeModal();openAppSettings()"><span>⚙️</span>تنظیمات</button><button onclick="closeModal();openPremiumShop()"><span>👑</span>اشتراک PRO</button><button onclick="closeModal();openAdminPanel()"><span>🛡️</span>پنل ادمین</button></div></div><section class="pr-settings-section"><h4>🎨 رنگ پس‌زمینهٔ پروفایل</h4><div class="pr-color-grid" id="profileColorGrid">${renderProfileColors((await api('/api/settings')).profile_color||'#30251f')}</div><small style="color:#999">یکی از ۱۲ رنگ را انتخاب کن؛ انتخابت برای حسابت ذخیره می‌شود.</small></section><div class="pr-profile-details"><div><small>درباره من</small><b>${esc(u.bio||'هنوز توضیحی ثبت نشده است.')}</b></div><div><small>نام کاربری</small><b>@${esc(u.username||'—')}</b></div><div><small>وضعیت</small><b>فعال در پیام‌رسان</b></div></div><button class="pr-logout-btn" onclick="location.href='/logout'">↪ خروج از حساب</button>`;const ps=await api('/api/settings');if(ps.profile_color){const hero=document.querySelector('.pr-profile-hero');if(hero)hero.style.background=`radial-gradient(circle at 50% 0,${ps.profile_color}aa,transparent 58%),linear-gradient(145deg,${ps.profile_color},#111 82%)`;} $('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری پروفایل ناموفق بود');}}
 
 const meId = {{me['id']}};
 let activeUser = null;
@@ -1653,7 +1664,7 @@ const PR_STICKERS = [['😎','خفن'],['👑','سلطان'],['🖤','دارک']
 function openEmojiPicker(tab='emoji'){
  const emojiHtml=()=>`<div class="pr-emoji-grid">${PR_EMOJIS.map(x=>`<button type="button" onclick="insertPRToken('${x}')">${x}</button>`).join('')}</div>`;
  const stickerHtml=()=>`<div class="pr-sticker-grid">${PR_STICKERS.map(x=>`<button class="pr-sticker" type="button" onclick="sendPRSticker('${x[0]}','${x[1]}')">${x[0]}<small>${x[1]}</small></button>`).join('')}</div><p style="font-size:10px;color:#888;line-height:1.8;margin-top:12px">این بستهٔ استیکر فعلاً با ایموجی‌های بزرگ ارسال می‌شود؛ برای استیکرهای تصویری واقعی باید فایل‌های استیکر به سرور اضافه شوند.</p>`;
- $('modalContent').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between"><div><h3>ایموجی و استیکر</h3><p style="font-size:11px;color:#999;margin-top:5px">حالتت رو با یه واکنش نشون بده ✨</p></div><span class="pr-badge">RANGO PRO</span></div><div class="pr-picker-tabs"><button id="prEmojiTab" class="${tab==='emoji'?'active':''}" onclick="switchPRPicker('emoji')">😊 ایموجی</button><button id="prStickerTab" class="${tab==='sticker'?'active':''}" onclick="switchPRPicker('sticker')">🧸 استیکر</button></div><div id="prPickerBody">${tab==='emoji'?emojiHtml():stickerHtml()}</div><button onclick="closeModal()" style="width:100%;padding:10px;border:1px solid #333;border-radius:12px;background:#111;color:#ddd;margin-top:12px">بستن</button>`;
+ $('modalContent').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between"><div><h3>ایموجی و استیکر</h3><p style="font-size:11px;color:#999;margin-top:5px">حالتت رو با یه واکنش نشون بده ✨</p></div><span class="pr-badge">PAYAMR PRO</span></div><div class="pr-picker-tabs"><button id="prEmojiTab" class="${tab==='emoji'?'active':''}" onclick="switchPRPicker('emoji')">😊 ایموجی</button><button id="prStickerTab" class="${tab==='sticker'?'active':''}" onclick="switchPRPicker('sticker')">🧸 استیکر</button></div><div id="prPickerBody">${tab==='emoji'?emojiHtml():stickerHtml()}</div><button onclick="closeModal()" style="width:100%;padding:10px;border:1px solid #333;border-radius:12px;background:#111;color:#ddd;margin-top:12px">بستن</button>`;
  window.prEmojiHtml=emojiHtml;window.prStickerHtml=stickerHtml;$('modalOverlay').classList.remove('hidden');
 }
 function switchPRPicker(tab){$('prEmojiTab').classList.toggle('active',tab==='emoji');$('prStickerTab').classList.toggle('active',tab==='sticker');$('prPickerBody').innerHTML=tab==='emoji'?window.prEmojiHtml():window.prStickerHtml();}
@@ -1672,11 +1683,11 @@ async function sendPRSticker(emoji,label){
 }
 function openPremiumShop(){
  const isDemo=localStorage.getItem('pr_demo_premium')==='1';
- $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">RANGO • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">۵۰٬۰۰۰ تومان</div><p>اشتراک یک‌ماههٔ PRO؛ درخواست خرید را برای ادمین تلگرام بفرست.</p><button class="secondary" onclick="requestProPurchase()">🛒 درخواست خرید اشتراک</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">۵۰٬۰۰۰ تومان / ماه</div><p>پس از بررسی واریز، ادمین اشتراک را فعال می‌کند.</p><button onclick="requestProPurchase()">👑 خرید PRO MAX</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">پرداخت مستقیم در سایت انجام نمی‌شود. با زدن دکمه، پیام آماده در تلگرام باز می‌شود؛ پس از بررسی پرداخت، ادمین اشتراک را فعال می‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
+ $('modalContent').innerHTML=`<div class="pr-premium-hero"><div class="eyebrow">PAYAMRASAN • EXCLUSIVE</div><h2>پیام‌رسان، در سطح بالاتر. ✦</h2><p>ظاهر لوکس‌تر، شخصی‌سازی بیشتر و تجربه‌ای خاص‌تر برای گفتگوهایت. این بخش فعلاً پیش‌نمایش فروشگاه اشتراک است.</p><span class="pr-badge">${isDemo?'عضویت نمایشی فعال است':'PRO MEMBERSHIP'}</span></div><div class="pr-perks"><div class="pr-perk">🎨<b>پوسته‌های اختصاصی</b><span>ظاهرهای سینمایی و شیشه‌ای برای برنامه</span></div><div class="pr-perk">🧸<b>بسته‌های استیکر</b><span>مجموعه‌های واکنش و استیکرهای خاص</span></div><div class="pr-perk">👑<b>نشان پرو</b><span>نشان ویژه کنار نام و پروفایل</span></div><div class="pr-perk">✨<b>افکت‌های پیام</b><span>نمایش‌های جذاب برای پیام‌های منتخب</span></div><div class="pr-perk">🪄<b>پروفایل شخصی‌سازی‌شده</b><span>قاب و استایل نمایشی اختصاصی</span></div><div class="pr-perk">🚀<b>قابلیت‌های آینده</b><span>امکانات جدید در نسخه‌های بعدی</span></div></div><div class="pr-plan-grid"><div class="pr-plan"><span class="pr-badge">شروع ساده</span><h3>PRO ماهانه</h3><div class="price">۵۰٬۰۰۰ تومان</div><p>اشتراک یک‌ماههٔ PRO؛ درخواست خرید را برای ادمین تلگرام بفرست.</p><button class="secondary" onclick="requestProPurchase()">🛒 درخواست خرید اشتراک</button></div><div class="pr-plan featured"><span class="pr-badge">پیشنهاد ویژه</span><h3>PRO MAX</h3><div class="price">۵۰٬۰۰۰ تومان / ماه</div><p>پس از بررسی واریز، ادمین اشتراک را فعال می‌کند.</p><button onclick="requestProPurchase()">👑 خرید PRO MAX</button></div></div><p style="font-size:10px;color:#888;line-height:1.9;margin-top:14px">پرداخت مستقیم در سایت انجام نمی‌شود. با زدن دکمه، پیام آماده در تلگرام باز می‌شود؛ پس از بررسی پرداخت، ادمین اشتراک را فعال می‌کند.</p><button onclick="closeModal()" style="width:100%;margin-top:8px;padding:10px;background:#111;color:#ddd;border:1px solid #333;border-radius:12px">برگشت به گفتگو</button>`;
  $('modalOverlay').classList.remove('hidden');
 }
 async function requestProPurchase(){
- try{const me=await api('/api/me');const msg=`سلام، درخواست خرید اشتراک Rango دارم.\nآیدی: @${me.username}\nمبلغ: ۵۰٬۰۰۰ تومان\nمدت: یک ماه\nلطفاً اطلاعات پرداخت را ارسال کنید.`;const admin=(window.PR_ADMIN_TELEGRAM_USERNAME||'YOUR_TELEGRAM_USERNAME').replace(/^@/,'');if(!admin||admin==='YOUR_TELEGRAM_USERNAME'){showToast('ابتدا ADMIN_TELEGRAM_USERNAME را در تنظیمات سرور روی آیدی تلگرام خودت تنظیم کن.');return;}window.location.href=`https://t.me/${encodeURIComponent(admin)}?text=${encodeURIComponent(msg)}`;}catch(e){showToast(e.message||'بازکردن درخواست خرید ناموفق بود');}
+ try{const me=await api('/api/me');const msg=`سلام، درخواست خرید اشتراک PayamRasan Pro دارم.\nآیدی: @${me.username}\nمبلغ: ۵۰٬۰۰۰ تومان\nمدت: یک ماه\nلطفاً اطلاعات پرداخت را ارسال کنید.`;const admin=(window.PR_ADMIN_TELEGRAM_USERNAME||'YOUR_TELEGRAM_USERNAME').replace(/^@/,'');if(!admin||admin==='YOUR_TELEGRAM_USERNAME'){showToast('ابتدا ADMIN_TELEGRAM_USERNAME را در تنظیمات سرور روی آیدی تلگرام خودت تنظیم کن.');return;}window.location.href=`https://t.me/${encodeURIComponent(admin)}?text=${encodeURIComponent(msg)}`;}catch(e){showToast(e.message||'بازکردن درخواست خرید ناموفق بود');}
 }
 async function openStories(){
  try{const d=await api('/api/stories');const me=await api('/api/me');const list=d.stories.map(s=>`<article class="pr-story-card"><b>${esc(s.display_name||s.username)}</b> <small>@${esc(s.username)} · ${new Date(s.created_at).toLocaleString()}</small>${s.media_url?`<p><a href="${esc(s.media_url)}" target="_blank" rel="noopener">🖼️ مشاهدهٔ رسانه</a></p>`:''}<p style="white-space:pre-wrap">${esc(s.body||'')}</p>${s.user_id===me.id?`<button onclick="deleteStory(${s.id})">🗑️ حذف استوری من</button>`:''}</article>`).join('');$('modalContent').innerHTML=`<div class="pr-screen-head"><div><div class="pr-eyebrow">STORIES · 24 HOURS</div><h2>استوری‌ها ✨</h2><p>استوری‌ها پس از ۲۴ ساعت منقضی می‌شوند.</p></div><button class="pr-close-round" onclick="closeModal()">×</button></div><div class="pr-admin-panel"><textarea id="prStoryText" maxlength="500" placeholder="چی می‌خوای به اشتراک بذاری؟" style="width:100%;box-sizing:border-box;min-height:90px;background:#111;color:#fff;border:1px solid #ffffff20;border-radius:12px;padding:12px"></textarea><input id="prStoryMedia" placeholder="لینک تصویر/ویدئو (اختیاری)" style="width:100%;box-sizing:border-box;padding:11px;background:#111;color:#fff;border:1px solid #ffffff20;border-radius:10px;margin-top:8px"><button onclick="publishStory()" style="margin-top:8px;padding:11px 15px;border:0;border-radius:11px;background:linear-gradient(135deg,#b49a82,#6c5544);color:#fff;font-weight:800">＋ انتشار استوری</button></div><h3>استوری‌های اخیر</h3>${list||'<div class="pr-empty-state">هنوز استوری‌ای منتشر نشده.</div>'}`;$('modalOverlay').classList.remove('hidden');}catch(e){showToast(e.message||'بارگذاری استوری‌ها ناموفق بود')}
@@ -1908,6 +1919,12 @@ async function deleteChat(id) {
   await api('/api/chats/' + id, {method:'DELETE'}); closeModal(); activeUser=null;
   $('chatMessages').innerHTML='<div style="margin:auto;color:var(--text-muted)">گفتگو حذف شد.</div>'; loadDialogs();
 }
+function toggleRangoMenu(e){e?.stopPropagation();document.getElementById('rangoMainMenu')?.classList.toggle('hidden');}
+function closeRangoMenu(){document.getElementById('rangoMainMenu')?.classList.add('hidden');}
+document.addEventListener('click',e=>{const menu=document.getElementById('rangoMainMenu'),trigger=document.getElementById('rangoMenuTrigger');if(menu&&!menu.contains(e.target)&&e.target!==trigger)closeRangoMenu();});
+function syncRangoThemeMenu(){const t=document.body.dataset.theme||localStorage.getItem('pr-theme')||'dark';const icon=document.getElementById('rangoThemeIcon'),label=document.getElementById('rangoThemeLabel');if(icon)icon.textContent=t==='light'?'🌙':'☀️';if(label)label.textContent=t==='light'?'حالت تیره':'حالت روشن';}
+async function toggleRangoTheme(){const next=(document.body.dataset.theme||localStorage.getItem('pr-theme')||'dark')==='light'?'dark':'light';applyTheme(next);syncRangoThemeMenu();closeRangoMenu();try{const current=await api('/api/settings');await api('/api/settings',{method:'POST',body:JSON.stringify({...current,theme:next})});}catch(e){console.warn('Theme preference saved locally only',e);}}
+async function openSavedMessagesRango(){closeRangoMenu();try{const me=await api('/api/me');await openUserChat(me.id,'پیام‌های ذخیره‌شده',me.username,me.avatar||'');}catch(e){showToast('باز کردن پیام‌های ذخیره‌شده ممکن نشد');}}
 function applyTheme(theme) {
   const root=document.documentElement;
   if (!['dark','light'].includes(theme)) theme='dark';
@@ -1923,6 +1940,7 @@ function applyTheme(theme) {
   document.body.style.color=t.text;
   document.querySelectorAll('.sidebar-header, .sidebar > div:first-child').forEach(el=>{el.style.background=t.panel;});
   try { localStorage.setItem('pr-theme',theme); } catch(e) {}
+  if(typeof syncRangoThemeMenu==='function') syncRangoThemeMenu();
 }
 function getAppLanguage() {
   try { return localStorage.getItem('pr-language') === 'en' ? 'en' : 'fa'; } catch(e) { return 'fa'; }
@@ -1935,7 +1953,7 @@ function applyLanguage(lang) {
   document.body.dir=document.documentElement.dir;
   const en=lang==='en';
   const search=$('searchInput'); if(search) search.placeholder=en?'Search username...':'جستجو آیدی...';
-  const title=$('chatTitle'); if(title && !activeUser && !activeGroup) title.textContent=en?'Rango':'تلگرام پرو';
+  const title=$('chatTitle'); if(title && !activeUser && !activeGroup) title.textContent=en?'PayamRasan Pro':'تلگرام پرو';
   const status=$('chatStatus'); if(status && !activeUser && !activeGroup) status.textContent=en?'Select a chat':'انتخاب گفتگو';
   const input=$('messageInput'); if(input) input.placeholder=en?'Write a message...':'نوشتن پیام...';
   const settingsBtn=document.querySelector('.folder-icon[onclick="openAppSettings()"]'); if(settingsBtn) settingsBtn.title=en?'Settings and themes':'تنظیمات و تم‌ها';
