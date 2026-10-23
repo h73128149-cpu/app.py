@@ -14,7 +14,13 @@ UPLOAD_DIR = os.environ.get("CHAT_UPLOAD_DIR", os.path.join(APP_DIR, "uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("CHAT_SECRET_KEY") or secrets.token_hex(32)
+# Configure CHAT_SECRET_KEY as a stable secret in Render; otherwise sessions reset on restart.
+app.config["SECRET_KEY"] = os.environ.get("CHAT_SECRET_KEY") or ""
+if not app.config["SECRET_KEY"]:
+    # Local development fallback only. Production must set CHAT_SECRET_KEY in its environment.
+    app.config["SECRET_KEY"] = secrets.token_hex(32)
+app.config["PERMANENT_SESSION_LIFETIME"] = __import__('datetime').timedelta(days=365)
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -40,7 +46,7 @@ def add_security_headers(response):
 
 @app.get("/healthz")
 def healthz():
-    return jsonify(status="ok", service="PayamRasan Pro")
+    return jsonify(status="ok", service="RANGO")
 
 def db():
     if "db" not in g:
@@ -191,7 +197,15 @@ def get_stories():
 @app.post("/api/stories")
 @login_required
 def create_story():
-    u=current_user(); data=request.get_json(silent=True) or {}
+    u=current_user()
+    sub=db().execute("SELECT plan,status,expires_at FROM user_subscriptions WHERE user_id=?", (u["id"],)).fetchone()
+    pro_active=False
+    if sub and sub["plan"] == "pro" and sub["status"] == "active" and sub["expires_at"]:
+        try: pro_active=datetime.fromisoformat(sub["expires_at"].replace("Z", "+00:00")) > datetime.now(timezone.utc)
+        except (ValueError, TypeError): pro_active=False
+    if not pro_active:
+        return jsonify(error="انتشار استوری به اشتراک فعال PRO نیاز دارد.", requires_pro=True),403
+    data=request.get_json(silent=True) or {}
     body=str(data.get('body','')).strip()[:500]
     media=str(data.get('media_url','')).strip()[:1000]
     if not body and not media: return jsonify(error="متن استوری یا لینک رسانه را وارد کن."),400
@@ -249,25 +263,38 @@ def register():
                 cur = db().execute("INSERT INTO users(username,display_name,password_hash,created_at,last_seen) VALUES(?,?,?,?,?)",
                                    (username.lower(),display,hash_password(password),now(),now()))
                 db().execute("INSERT INTO device_accounts(device_token,user_id,created_at) VALUES(?,?,?)", (device_token,cur.lastrowid,now()))
-                db().commit(); session.clear(); session["uid"] = cur.lastrowid
+                db().commit(); session.clear(); session.permanent = True; session["uid"] = cur.lastrowid
                 response = redirect(url_for("index"))
-                response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, samesite="Lax")
+                response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, secure=app.config["SESSION_COOKIE_SECURE"], samesite="Lax")
                 return response
             except sqlite3.IntegrityError: error = "این نام کاربری قبلاً گرفته شده است."
     response = app.make_response(render_template_string(AUTH, title="ساخت حساب کاربری", error=error, action="register"))
-    response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, samesite="Lax")
+    response.set_cookie("pr_device", device_token, max_age=60*60*24*365, httponly=True, secure=app.config["SESSION_COOKIE_SECURE"], samesite="Lax")
     return response
 
 @app.route("/login", methods=["GET","POST"])
 def login():
+    # Restore the most recently used account on this browser/device when its long-lived
+    # device cookie maps to exactly one account. Users can still explicitly log out.
+    if request.method == "GET" and not current_user():
+        token = request.cookies.get("pr_device", "")
+        if token:
+            rows = db().execute("SELECT user_id FROM device_accounts WHERE device_token=? ORDER BY created_at DESC LIMIT 1", (token,)).fetchall()
+            if rows:
+                session.clear(); session.permanent = True; session["uid"] = rows[0]["user_id"]
+                return redirect(url_for("index"))
     error = ""
     if request.method == "POST":
         username = request.form.get("username","").strip().lstrip("@").lower()
         user = db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         if user and check_password(request.form.get("password",""), user["password_hash"]):
-            session.clear(); session["uid"] = user["id"]
+            session.clear(); session.permanent = True; session["uid"] = user["id"]
+            token = request.cookies.get("pr_device") or secrets.token_urlsafe(32)
+            db().execute("INSERT INTO device_accounts(device_token,user_id,created_at) VALUES(?,?,?) ON CONFLICT(device_token,user_id) DO UPDATE SET created_at=excluded.created_at", (token,user["id"],now()))
             db().execute("UPDATE users SET online=1,last_seen=? WHERE id=?", (now(),user["id"])); db().commit()
-            return redirect(url_for("index"))
+            response = redirect(url_for("index"))
+            response.set_cookie("pr_device", token, max_age=60*60*24*365, httponly=True, secure=app.config["SESSION_COOKIE_SECURE"], samesite="Lax")
+            return response
         error = "نام کاربری یا رمز عبور نادرست است."
     return render_template_string(AUTH, title="ورود به رنگو", error=error, action="login")
 
@@ -2091,7 +2118,16 @@ async function showArchivedChats(){
 async function unarchiveChat(id){try{await api('/api/chats/'+id+'/unarchive',{method:'POST'});await showArchivedChats();await loadDialogs();showToast('گفتگو بازگردانی شد');}catch(e){showToast(e.message||'خطا');}}
 
 async function togglePinMessage(id){try{const d=await api('/api/messages/'+id+'/pin',{method:'POST'});await refreshActiveChat();showToast(d.pinned?'پیام سنجاق شد':'سنجاق پیام برداشته شد');}catch(e){showToast(e.message);}}
-async function reactToMessage(id){const reaction=await showInput('واکنش را انتخاب کن: 👍 ❤️ 😂 😮 😢 🔥 👏 🤔','👍','واکنش به پیام');if(reaction===null)return;try{await api('/api/messages/'+id+'/react',{method:'POST',body:JSON.stringify({reaction:reaction.trim()})});await refreshActiveChat();}catch(e){showToast(e.message);}}
+async function reactToMessage(id){
+ const reactions=['❤️','👍','😂','😮','🔥'];
+ const old=document.getElementById('prReactionPicker');old?.remove();
+ const pop=document.createElement('div');pop.id='prReactionPicker';pop.setAttribute('role','dialog');
+ pop.style.cssText='position:fixed;z-index:310000;display:flex;gap:8px;padding:10px 12px;border:1px solid #ffffff24;border-radius:24px;background:rgba(20,24,30,.98);box-shadow:0 12px 40px #0008;direction:ltr';
+ pop.innerHTML=reactions.map(r=>`<button type="button" data-r="${r}" aria-label="واکنش ${r}" style="border:0;border-radius:50%;width:42px;height:42px;font-size:23px;background:#ffffff10;cursor:pointer">${r}</button>`).join('');
+ document.body.appendChild(pop);pop.style.left=Math.max(8,(innerWidth-pop.offsetWidth)/2)+'px';pop.style.top=Math.max(8,Math.min(innerHeight-64,innerHeight*.55))+'px';
+ pop.addEventListener('click',async e=>{const b=e.target.closest('[data-r]');if(!b)return;const reaction=b.dataset.r;pop.remove();try{await api('/api/messages/'+id+'/react',{method:'POST',body:JSON.stringify({reaction})});await refreshActiveChat();}catch(err){showToast(err.message||'ثبت واکنش ناموفق بود');}});
+ const dismiss=e=>{if(!pop.contains(e.target)){pop.remove();document.removeEventListener('pointerdown',dismiss,true)}};setTimeout(()=>document.addEventListener('pointerdown',dismiss,true),0);
+}
 function appendMessage(m, isGroup=false) {
   if (m.id != null && seenMessageIds.has(m.id)) return;
   if (m.id != null) seenMessageIds.add(m.id);
