@@ -1,5 +1,5 @@
 """
-PayamRasan Pro — Fixed & Complete Telegram Clone
+RANGO — Private Messaging
 """
 import os, re, sqlite3, secrets, hashlib, hmac
 from functools import wraps
@@ -801,8 +801,8 @@ body{position:relative;isolation:isolate;background:#050505!important;overflow-x
 body:before{content:"";position:fixed;inset:0;z-index:-2;linear-gradient(145deg,#080808,#111 55%,#080808)}
 body:after{content:"";position:fixed;inset:0;z-index:-1;opacity:.18;pointer-events:none;background-image:none}
 .auth-card{position:relative;width:min(460px,100%);padding:clamp(28px,5vw,46px);text-align:right;border-radius:20px;background:#141414!important;border:1px solid #292929;box-shadow:0 18px 48px #0008;backdrop-filter:none;overflow:hidden;animation:prAuthIn .28s ease-out both}
-.auth-card:before{content:"PR";display:grid;place-items:center;width:66px;height:66px;margin:0 0 24px auto;border-radius:22px;background:#e7e7e7;color:#080808;font-size:25px;font-weight:900;letter-spacing:-1px;box-shadow:none;transform:none}
-.auth-card:after{content:"PRIVATE • FAST • CONNECTED";display:block;margin-top:28px;padding-top:18px;border-top:1px solid #ffffff13;color:#777;font-size:10px;letter-spacing:2px;text-align:center;direction:ltr}
+.auth-card:before{content:"R";display:grid;place-items:center;width:66px;height:66px;margin:0 0 24px auto;border-radius:22px;background:#e7e7e7;color:#080808;font-size:25px;font-weight:900;letter-spacing:-1px;box-shadow:none;transform:none}
+.auth-card:after{content:"RANGO • PRIVATE MESSAGING";display:block;margin-top:28px;padding-top:18px;border-top:1px solid #ffffff13;color:#777;font-size:10px;letter-spacing:2px;text-align:center;direction:ltr}
 .auth-card h2{font-size:clamp(23px,4vw,30px)!important;line-height:1.5;margin-bottom:7px!important;color:#fff;letter-spacing:-.7px}
 .auth-card h2:after{content:"ارتباطی ساده، تجربه‌ای حرفه‌ای";display:block;margin-top:7px;color:#888;font-size:12px;font-weight:400;letter-spacing:0}
 .auth-card form{margin-top:25px}
@@ -870,7 +870,7 @@ PAGE = r"""
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Telegram Pro</title>
+<title>RANGO — پیام‌رسان خصوصی</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
 <style>
@@ -1373,6 +1373,25 @@ body[data-theme="light"] .chat-title,body[data-theme="light"] #chatTitle{color:#
  .pr-screen-head{position:sticky;top:0;z-index:3;padding:6px 0 14px;background:var(--panel-bg,#111923)}
 }
 .rango-logo-mark{display:grid!important;place-items:center!important;background:linear-gradient(145deg,#e7aa91,#9acde0)!important;color:#15232e!important;border-radius:16px!important;font-weight:950!important;box-shadow:0 8px 22px #0003!important}
+
+/* RANGO 2026: independent navigation screens; keep confirmations as compact dialogs */
+.modal-overlay:has(.pr-screen-head),
+.modal-overlay:has(.pr-profile-hero),
+.modal-overlay:has(#settingTheme){position:fixed!important;inset:0!important;z-index:200000!important;display:flex!important;align-items:stretch!important;justify-content:stretch!important;padding:0!important;background:var(--bg-main,#0b1118)!important;backdrop-filter:none!important;overflow:auto!important}
+.modal-overlay:has(.pr-screen-head) .modal-card,
+.modal-overlay:has(.pr-profile-hero) .modal-card,
+.modal-overlay:has(#settingTheme) .modal-card{width:100%!important;max-width:none!important;min-height:100vh!important;max-height:none!important;height:auto!important;margin:0!important;padding:28px max(22px,calc((100vw - 820px)/2)) 36px!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important;background:var(--panel-bg,#111923)!important}
+.modal-overlay:has(.pr-screen-head) .pr-screen-head,
+.modal-overlay:has(.pr-profile-hero) .pr-profile-top{position:sticky;top:0;z-index:5;padding:10px 0 16px;background:var(--panel-bg,#111923)}
+.modal-overlay:has(.pr-profile-hero) .pr-profile-hero{max-width:820px;margin:0 auto 18px}
+.modal-overlay:has(.pr-profile-hero) .pr-profile-details,.modal-overlay:has(.pr-profile-hero) .pr-settings-section,.modal-overlay:has(.pr-profile-hero) .pr-logout-btn{max-width:820px;margin-left:auto;margin-right:auto}
+.pr-message-menu{position:fixed;z-index:300000;min-width:220px;max-width:min(290px,calc(100vw - 20px));padding:7px;border:1px solid #ffffff20;border-radius:17px;background:rgba(20,24,30,.98);color:#f3f6f8;box-shadow:0 18px 55px #0009;animation:prMenuIn .13s ease-out;}
+.pr-message-menu button{display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;border:0;border-radius:11px;background:transparent;color:inherit;text-align:right;font:inherit;font-size:13px;cursor:pointer}
+.pr-message-menu button:hover{background:#ffffff12}.pr-message-menu button.danger{color:#ff9b9b}.pr-message-menu .pr-menu-caption{padding:8px 12px;color:#9fb7c6;font-size:11px;border-bottom:1px solid #ffffff12;margin-bottom:4px}
+body[data-theme="light"] .pr-message-menu{background:rgba(255,255,255,.99);color:#1b2a35;border-color:#d8e3eb}
+body[data-theme="light"] .pr-message-menu button:hover{background:#edf3f7}
+@media(max-width:768px){.modal-overlay:has(.pr-screen-head) .modal-card,.modal-overlay:has(.pr-profile-hero) .modal-card,.modal-overlay:has(#settingTheme) .modal-card{padding:calc(22px + env(safe-area-inset-top)) 18px calc(26px + env(safe-area-inset-bottom))!important;min-height:100dvh!important}.pr-message-menu{min-width:205px}}
+
 </style>
 
 <div class="tg-app">
@@ -1764,7 +1783,7 @@ async function openAppSettings() {
   const d = await api('/api/settings');
   const lang = getAppLanguage();
   const en = lang === 'en';
-  $('modalContent').innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:25px">⚙️</div><div><h3>${en?'App settings':'تنظیمات برنامه'}</h3><div style="font-size:12px;color:var(--text-muted);margin-top:3px">${en?'Appearance, privacy and chat experience':'ظاهر، حریم خصوصی و تجربهٔ گفتگو'}</div></div></div><hr style="border:0;border-top:1px solid var(--border-color);margin:12px 0">
+  $('modalContent').innerHTML = `<div class="pr-screen-head"><div><div class="pr-eyebrow">RANGO · PREFERENCES</div><h2>${en?'App settings':'تنظیمات برنامه'}</h2><p>${en?'Appearance, privacy and chat experience':'ظاهر، حریم خصوصی و تجربهٔ گفتگو'}</p></div><button class="pr-close-round" onclick="closeModal()" aria-label="بستن">×</button></div><hr style="border:0;border-top:1px solid var(--border-color);margin:12px 0">
     <label style="display:block;margin:10px 0">${en?'App language':'زبان برنامه'}</label>
     <select id="settingLanguage" onchange="applyLanguage(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:var(--text-main,white);border:1px solid var(--border-color);border-radius:9px"><option value="fa" ${!en?'selected':''}>فارسی</option><option value="en" ${en?'selected':''}>English</option></select>
     <label style="display:block;margin:12px 0 6px">${en?'Chat background (HEX color or image URL)':'پس‌زمینه چت (رنگ HEX یا لینک تصویر)'}</label>
@@ -1772,7 +1791,7 @@ async function openAppSettings() {
     <label style="display:flex;gap:8px;align-items:center;margin:14px 0"><input id="settingSeen" type="checkbox" ${d.show_last_seen?'checked':''} style="width:auto"> ${en?'Allow others to see my last seen':'اجازه نمایش آخرین بازدید من'}</label>
     <label style="display:block;margin:12px 0 6px">${en?'Color theme':'تم رنگی'}</label><select id="settingTheme" onchange="applyTheme(this.value)" style="width:100%;padding:11px;background:var(--bg-main);color:var(--text-main,white);border:1px solid var(--border-color);border-radius:9px"><option value="dark" ${d.theme!=='light'?'selected':''}>⚫ ${en?'Black':'سیاه'}</option><option value="light" ${d.theme==='light'?'selected':''}>⚪ ${en?'White':'سفید'}</option></select>
     <div style="font-size:12px;color:var(--text-muted);margin:10px 0 16px">${en?'Only black and white themes are available for now.':'فعلاً فقط تم‌های سیاه و سفید فعال هستند.'}</div>
-    <div class="pr-settings-section"><h4>🔔 اعلان‌ها و دانلود</h4>
+    <div class="pr-settings-section"><h4>🔔 اعلان‌ها و دانلود</h4><button type="button" onclick="requestRangoNotifications()" style="width:100%;padding:11px;margin:4px 0 10px;border:1px solid var(--border-color);border-radius:12px;background:var(--panel-hover);color:var(--text-main,white);font:inherit;cursor:pointer">اجازه اعلان‌های دستگاه 🔔</button><small id="prNotificationPermissionState" style="display:block;color:var(--text-muted);margin-bottom:8px">وضعیت اجازه اعلان در مرورگر/دستگاه</small>
       <label class="pr-setting-row"><span>فعال‌بودن اعلان‌های داخل برنامه</span><input id="settingNotifications" type="checkbox" ${d.notifications_enabled!==0?'checked':''}></label>
       <label class="pr-setting-row"><span>دانلود خودکار رسانه‌ها</span><input id="settingAutoDownload" type="checkbox" ${d.auto_download?'checked':''}></label>
       <label class="pr-setting-row"><span>صدای اعلان پیام جدید</span><input id="settingNotificationSound" type="checkbox" ${d.notification_sound!==0?'checked':''}></label>
@@ -2018,18 +2037,28 @@ function scrollBottom() { $('chatMessages').scrollTop =$('chatMessages').scrollH
 function esc(s) { return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const seenMessageIds = new Set();
-function messageMenu(m,isGroup=false) {
+let prMessageMenuNode=null;
+function closeMessageMenu(){prMessageMenuNode?.remove();prMessageMenuNode=null;document.removeEventListener('pointerdown',prMessageMenuOutside,true);}
+function prMessageMenuOutside(e){if(prMessageMenuNode&&!prMessageMenuNode.contains(e.target))closeMessageMenu();}
+function messageMenu(m,isGroup=false,ev=null) {
+  closeMessageMenu();
   const choices=[];
-  choices.push(['📋 کپی متن',()=>navigator.clipboard?.writeText(m.body||'')]);
-  choices.push(['↩️ پاسخ',()=>replyToMessage(m)]);
-  if(!isGroup) choices.push(['➡️ فوروارد پیام',()=>forwardMessage(m.id)]);
-  if(!isGroup){ choices.push([m.pinned?'📌 برداشتن سنجاق':'📌 سنجاق کردن',()=>togglePinMessage(m.id)]); choices.push(['👍 واکنش',()=>reactToMessage(m.id)]); }
-  if(!isGroup && activeUser && activeUser.id!==meId) choices.push(['📦 انتقال گفتگو به بایگانی',()=>archiveActiveChat()]);
-  if(!isGroup && m.sender_id===meId){ choices.push(['✏️ ویرایش',()=>editMessage(m.id,m.body||'')]); choices.push(['🗑️ حذف',()=>deleteMessage(m.id)]); }
-  const html=`<h3 style="margin-bottom:12px">گزینه‌های پیام</h3>${choices.map((c,i)=>`<button onclick="runMessageChoice(${i})" style="display:block;width:100%;padding:11px;margin:6px 0;background:#172536;color:white;border:1px solid #344a64;border-radius:9px;text-align:right">${c[0]}</button>`).join('')}<button onclick="closeModal()" style="width:100%;padding:10px;background:transparent;color:#9fb2c7;border:0">بستن</button>`;
-  window._messageChoices=choices; $('modalContent').innerHTML=html; $('modalOverlay').classList.remove('hidden');
+  choices.push(['📋','کپی متن',()=>navigator.clipboard?.writeText(m.body||'')]);
+  choices.push(['↩️','پاسخ',()=>replyToMessage(m)]);
+  if(!isGroup) choices.push(['➡️','فوروارد پیام',()=>forwardMessage(m.id)]);
+  if(!isGroup){ choices.push(['📌',m.pinned?'برداشتن سنجاق':'سنجاق کردن',()=>togglePinMessage(m.id)]); choices.push(['👍','واکنش',()=>reactToMessage(m.id)]); }
+  if(!isGroup && activeUser && activeUser.id!==meId) choices.push(['🗃️','انتقال گفتگو به بایگانی',()=>archiveActiveChat()]);
+  if(!isGroup && m.sender_id===meId){ choices.push(['✏️','ویرایش',()=>editMessage(m.id,m.body||'')]); choices.push(['🗑️','حذف پیام',()=>deleteMessage(m.id),true]); }
+  const menu=document.createElement('div');menu.className='pr-message-menu';menu.setAttribute('role','menu');
+  menu.innerHTML=`<div class="pr-menu-caption">عملیات پیام</div>${choices.map((c,i)=>`<button type="button" role="menuitem" class="${c[3]?'danger':''}" data-choice="${i}"><span>${c[0]}</span><span>${c[1]}</span></button>`).join('')}`;
+  menu.addEventListener('click',e=>{const b=e.target.closest('[data-choice]');if(!b)return;const c=choices[Number(b.dataset.choice)];closeMessageMenu();Promise.resolve().then(c[2]).catch(err=>showToast(err?.message||'عملیات انجام نشد'));});
+  document.body.appendChild(menu);prMessageMenuNode=menu;
+  const x=ev?.clientX??Math.min(innerWidth-250,innerWidth*.5),y=ev?.clientY??innerHeight*.5;
+  const rect=menu.getBoundingClientRect();menu.style.left=Math.max(10,Math.min(x,innerWidth-rect.width-10))+'px';menu.style.top=Math.max(10,Math.min(y,innerHeight-rect.height-10))+'px';
+  setTimeout(()=>document.addEventListener('pointerdown',prMessageMenuOutside,true),0);
 }
-function runMessageChoice(i){const c=window._messageChoices?.[i];if(c){closeModal();Promise.resolve(c[1]()).catch(()=>{});}}
+function runMessageChoice(i){const c=window._messageChoices?.[i];if(c){Promise.resolve(c[1]()).catch(()=>{});}}
+function requestRangoNotifications(){if(!('Notification' in window)){showToast('این مرورگر اعلان وب را پشتیبانی نمی‌کند؛ در WebView ممکن است اعلان سیستم نیاز به پیاده‌سازی اندروید داشته باشد.');return;}Notification.requestPermission().then(p=>{const el=document.getElementById('prNotificationPermissionState');if(el)el.textContent=p==='granted'?'اجازه اعلان فعال است ✓':p==='denied'?'اجازه اعلان در تنظیمات دستگاه مسدود شده است':'اجازه اعلان هنوز داده نشده است';showToast(p==='granted'?'اجازه اعلان فعال شد':p==='denied'?'اجازه اعلان رد شد':'اجازه اعلان تغییر نکرد');}).catch(()=>showToast('درخواست اجازه اعلان انجام نشد'));}
 
 async function replyToMessage(m){
  const body=await showInput('پاسخت را بنویس:', '', 'پاسخ به پیام'); if(body===null||!body.trim())return;
@@ -2070,7 +2099,8 @@ function appendMessage(m, isGroup=false) {
   let el = document.createElement('div');
   el.dataset.messageId = m.id ?? '';
   el.title = 'برای گزینه‌های بیشتر راست‌کلیک کنید';
-  el.addEventListener('contextmenu', ev => { ev.preventDefault(); messageMenu(m, isGroup); });
+  el.addEventListener('contextmenu', ev => { ev.preventDefault(); messageMenu(m, isGroup, ev); });
+  let prMsgPressTimer=null;el.addEventListener('touchstart',ev=>{const t=ev.touches?.[0];if(!t)return;prMsgPressTimer=setTimeout(()=>messageMenu(m,isGroup,{clientX:t.clientX,clientY:t.clientY}),520);},{passive:true});el.addEventListener('touchend',()=>{if(prMsgPressTimer)clearTimeout(prMsgPressTimer);prMsgPressTimer=null;},{passive:true});el.addEventListener('touchmove',()=>{if(prMsgPressTimer)clearTimeout(prMsgPressTimer);prMsgPressTimer=null;},{passive:true});
   el.className = `message-bubble ${isMine?'mine':''}`;
   let ticks = isMine ? (m.read_at ? ' <span style="color:#38bdf8;">✓✓</span>' : ' <span>✓</span>') : '';
   let bodyHtml = esc(m.body);
